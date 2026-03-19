@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  /* Meridian Logic brand palette */
+  --color-navy: #0039A6;
+  --color-navy-light: rgba(0, 57, 166, 0.08);
+  --color-green: #72A375;
+  --color-green-light: rgba(114, 163, 117, 0.08);
+  --color-green-bright: #8FCF92;
+  --color-amber: #B8860B;
+  --color-amber-light: rgba(184, 134, 11, 0.08);
+  --color-red: #C0452A;
+  --color-red-light: rgba(192, 69, 42, 0.08);
+
+  --color-bg: #FAFAFA;
+  --color-surface: #FFFFFF;
+  --color-border: #E0E0E0;
+  --color-text: #1a1a1a;
+  --color-text-muted: #666666;
+  --color-text-faint: #999999;
+
+  /* Font families — Instrument Sans primary */
+  --font-brand: 'Outfit', sans-serif;
+  --font-heading: 'Instrument Sans', sans-serif;
+  --font-body: 'Instrument Sans', sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.15); }
