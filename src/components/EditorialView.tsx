@@ -98,7 +98,7 @@ function Headline({ hearing, onSelect, size }: { hearing: HearingListItem; onSel
   );
 }
 
-export function EditorialView({ onSelectHearing, selectedEventId }: Props) {
+export function EditorialView({ onSelectHearing, selectedEventId: _selectedEventId }: Props) {
   const { data: stats } = useStats();
   const { data: committees } = useCommittees();
   const { data } = useHearings({ limit: 200 });
@@ -110,7 +110,7 @@ export function EditorialView({ onSelectHearing, selectedEventId }: Props) {
     (h) => h.status === HearingStatus.PREPARING || h.status === HearingStatus.PROCESSING
   );
   const rest = hearings.filter(
-    (h) => ![HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING].includes(h.status)
+    (h) => !([HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING] as HearingStatus[]).includes(h.status)
   );
 
   return (

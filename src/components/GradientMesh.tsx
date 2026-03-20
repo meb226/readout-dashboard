@@ -7,7 +7,7 @@
 
 import { useHearings } from "../hooks/useHearings";
 import { useStats } from "../hooks/useStats";
-import { useCommittees } from "../hooks/useCommittees";
+// useCommittees available for future use
 import { HearingStatus } from "../types/api";
 import type { HearingListItem } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
@@ -123,7 +123,7 @@ export function GradientMesh({ onSelectHearing, selectedEventId }: Props) {
     (h) => h.status === HearingStatus.PREPARING || h.status === HearingStatus.PROCESSING
   );
   const rest = hearings.filter(
-    (h) => ![HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING].includes(h.status)
+    (h) => !([HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING] as HearingStatus[]).includes(h.status)
   );
 
   return (

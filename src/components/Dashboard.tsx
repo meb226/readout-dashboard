@@ -300,7 +300,7 @@ function CompactRow({ hearing, onSelect }: { hearing: HearingListItem; onSelect:
 
 // ─── Main Dashboard ────────────────────────────────────────────────
 
-export function Dashboard({ committeeId, selectedEventId, onSelectHearing }: DashboardProps) {
+export function Dashboard({ committeeId, selectedEventId: _selectedEventId, onSelectHearing }: DashboardProps) {
   const { data, isLoading, error } = useHearings({
     committee_id: committeeId ?? undefined,
     limit: 200,

@@ -37,7 +37,7 @@ function chamberAccent(chamber: string): string {
   return "#666";
 }
 
-function chamberLight(chamber: string): string {
+export function chamberLight(chamber: string): string {
   if (chamber === "senate") return "rgba(0, 57, 166, 0.06)";
   if (chamber === "house") return "rgba(139, 26, 26, 0.06)";
   return "rgba(0,0,0,0.03)";

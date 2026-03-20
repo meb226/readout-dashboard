@@ -103,7 +103,7 @@ export function MissionControl({ onSelectHearing, selectedEventId }: Props) {
     (h) => h.status === HearingStatus.PREPARING || h.status === HearingStatus.PROCESSING
   );
   const pipeline = hearings.filter(
-    (h) => ![HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING].includes(h.status)
+    (h) => !([HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING] as HearingStatus[]).includes(h.status)
   );
 
   return (

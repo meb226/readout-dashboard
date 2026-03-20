@@ -287,7 +287,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
 
 // ─── Expanded View ────────────────────────────────────────────────
 
-function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; onClose: () => void }) {
+export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; onClose: () => void }) {
   const c = cid(hearing.committee_id);
   const { data: detail } = useHearingDetail(hearing.event_id);
   const isComplete = hearing.status === HearingStatus.COMPLETE;
@@ -840,7 +840,7 @@ interface Props {
 
 type Page = "dashboard" | "saved" | "configure";
 
-export function ReadoutDashboard({ onSelectHearing, selectedEventId }: Props) {
+export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEventId: _selectedEventId }: Props) {
   const [page, setPage] = useState<Page>("dashboard");
   const [committeeFilter, setCommitteeFilter] = useState<string | null>(null);
   const [monthFilter, setMonthFilter] = useState<string | null>(null);
@@ -884,7 +884,7 @@ export function ReadoutDashboard({ onSelectHearing, selectedEventId }: Props) {
   const upcomingIds = new Set(upcoming.map((h) => h.event_id));
 
   const rest = hearings.filter((h) =>
-    ![HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING].includes(h.status)
+    !([HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING] as HearingStatus[]).includes(h.status)
     && !upcomingIds.has(h.event_id)
   );
 
