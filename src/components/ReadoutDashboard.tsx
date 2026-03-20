@@ -2,7 +2,7 @@
  * ML-65: Readout Dashboard — contemporary design.
  *
  * Stripe/Google-inspired: animated gradient mesh, glassmorphism cards,
- * staggered entrance animations, smooth hover states, Instrument Sans.
+ * staggered entrance animations, smooth hover states, Inter.
  * Capitol photo background at low opacity.
  */
 
@@ -108,8 +108,8 @@ const GLOBAL_STYLES = `
 
 // ─── Flip Card ────────────────────────────────────────────────────
 
-function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
-  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void;
+function Card({ hearing, index, flippedId, onFlip, onOpenMemo, showFlag = false }: {
+  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; showFlag?: boolean;
 }) {
   const c = cid(hearing.committee_id);
   const isComplete = hearing.status === HearingStatus.COMPLETE;
@@ -118,6 +118,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
   const isProcessing = hearing.status === HearingStatus.PROCESSING;
   const isActionable = isReady || isPreparing || isProcessing;
   const isFlipped = flippedId === hearing.event_id;
+  const [flagged, setFlagged] = useState(false);
 
   // Close on escape
   useEffect(() => {
@@ -147,12 +148,12 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
 
       <div
         className={`card-enter flip-container cursor-pointer ${isFlipped ? "is-flipped" : ""}`}
-        style={{ minHeight: "220px", animationDelay: `${index * 40}ms` }}
+        style={{ minHeight: "260px", animationDelay: `${index * 40}ms` }}
         onClick={() => onFlip(isFlipped ? null : hearing.event_id)}
       >
         <div className={`flip-inner ${isFlipped ? "flipped" : ""}`}>
           {/* ─── FRONT ─── */}
-          <div className="flip-front flex flex-col p-5 group transition-shadow duration-300 hover:shadow-lg"
+          <div className="flip-front flex flex-col p-6 group transition-shadow duration-300 hover:shadow-lg"
             style={glassStyle}
             onMouseEnter={(e) => {
               if (!isFlipped) { e.currentTarget.style.background = "rgba(255,255,255,0.78)"; e.currentTarget.style.borderColor = `${c.accent}25`; }
@@ -163,20 +164,35 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
           >
             <div className="mb-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider"
+                <span className="px-2 py-0.5 rounded text-xs font-bold tracking-wider"
                   style={{ background: `${c.accent}12`, color: c.accent }}>
                   {c.ch}.{c.code}
                 </span>
-                <span className="text-[13px] font-bold truncate" style={{ color: c.accent }}>
+                <span className="text-[15px] font-bold truncate flex-1" style={{ color: c.accent }}>
                   {hearing.committee_name}
                 </span>
+                {showFlag && (
+                  <button onClick={(e) => { e.stopPropagation(); setFlagged(!flagged); }}
+                    className="ml-auto flex-shrink-0 transition-all duration-200 hover:scale-110"
+                    title={flagged ? "Remove flag" : "Flag — auto-process when available"}>
+                    {flagged ? (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill={c.accent} stroke={c.accent} strokeWidth="1.5">
+                        <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-[#666] hover:text-[#444]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
-            <p className="text-xl font-bold text-[#1a1a1a] mb-1" style={{ letterSpacing: "-0.02em" }}>
+            <p className="text-2xl font-bold text-[#1a1a1a] mb-1" style={{ letterSpacing: "-0.02em" }}>
               {shortDate(hearing.hearing_date)}
             </p>
-            <p className="text-[13px] text-[#555] leading-snug flex-1">
-              {summarizeTitle(hearing.title, 120)}
+            <p className="text-[15px] text-[#555] leading-snug flex-1" title={hearing.title}>
+              {summarizeTitle(hearing.title, 160)}
             </p>
             <div className="mt-3 pt-2 flex items-center" style={{ borderTop: "1px solid rgba(0,0,0,0.04)" }}>
               {isComplete && (
@@ -187,22 +203,22 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
               )}
               {isReady && (
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#0039A6]" />
-                  <span className="text-[10px] text-[#0039A6] font-semibold">Ready to process</span>
+                  <span className="w-2 h-2 rounded-full bg-[#0039A6]" />
+                  <span className="text-xs text-[#0039A6] font-semibold">Ready to process</span>
                 </div>
               )}
               {(isPreparing || isProcessing) && (
                 <div className="flex items-center gap-1.5">
                   <div className="flex gap-0.5">
-                    <span className="w-1 h-1 rounded-full bg-[#B8860B] animate-pulse" style={{ animationDelay: "0ms" }} />
-                    <span className="w-1 h-1 rounded-full bg-[#B8860B] animate-pulse" style={{ animationDelay: "200ms" }} />
-                    <span className="w-1 h-1 rounded-full bg-[#B8860B] animate-pulse" style={{ animationDelay: "400ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#7B5EA7] animate-pulse" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#7B5EA7] animate-pulse" style={{ animationDelay: "200ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#7B5EA7] animate-pulse" style={{ animationDelay: "400ms" }} />
                   </div>
-                  <span className="text-[10px] text-[#B8860B] font-semibold">{isPreparing ? "Preparing" : "Processing"}</span>
+                  <span className="text-xs text-[#7B5EA7] font-semibold">{isPreparing ? "Preparing" : "Processing"}</span>
                 </div>
               )}
               {!isComplete && !isReady && !isPreparing && !isProcessing && (
-                <span className="text-[10px] text-[#ccc]">In pipeline</span>
+                <span className="text-xs text-[#666]">In pipeline</span>
               )}
             </div>
           </div>
@@ -216,11 +232,11 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
                   style={{ background: `${c.accent}10`, color: c.accent }}>
                   {c.ch}.{c.code}
                 </span>
-                <span className="text-xs text-[#999]">{hearing.committee_name}</span>
+                <span className="text-xs text-[#444]">{hearing.committee_name}</span>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); onFlip(null); }}
-                className="text-[#bbb] hover:text-[#666] text-xl transition-colors"
+                className="text-[#666] hover:text-[#666] text-xl transition-colors"
               >
                 &times;
               </button>
@@ -234,6 +250,72 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
               {hearing.title}
             </p>
 
+            {/* Pipeline status info for non-actionable, non-complete hearings */}
+            {!isActionable && !isComplete && (
+              <div className="mb-4 rounded-xl p-4" style={{ background: "rgba(0,0,0,0.02)", border: "1px solid rgba(0,0,0,0.06)" }}>
+                <div className="mb-3"><StatusBadge status={hearing.status} /></div>
+                {hearing.status === HearingStatus.DETECTED && (
+                  <div>
+                    <p className="text-sm font-semibold text-[#444] mb-1">Video Not Yet Available</p>
+                    <p className="text-xs text-[#666] leading-relaxed">
+                      This hearing has been detected on Congress.gov but no video source has been found yet.
+                      The system will automatically check for video availability.
+                    </p>
+                  </div>
+                )}
+                {hearing.status === HearingStatus.RESOLVED && (
+                  <div>
+                    <p className="text-sm font-semibold text-[#444] mb-1">Video Found — Awaiting Processing</p>
+                    <p className="text-xs text-[#666] leading-relaxed">
+                      {hearing.video_source_type ? `Source: ${hearing.video_source_type.replace(/_/g, " ")}` : "A video source has been located."}
+                      {" "}Auto-processing will begin shortly.
+                    </p>
+                  </div>
+                )}
+                {hearing.status === HearingStatus.FAILED && (
+                  <div>
+                    <p className="text-sm font-semibold text-[#C0452A] mb-1">Processing Failed</p>
+                    <p className="text-xs text-[#666] leading-relaxed">
+                      An error occurred during processing. The system may retry automatically,
+                      or a manual reprocess can be triggered.
+                    </p>
+                  </div>
+                )}
+                {hearing.status === HearingStatus.POSTPONED && (
+                  <div>
+                    <p className="text-sm font-semibold text-[#444] mb-1">Hearing Postponed</p>
+                    <p className="text-xs text-[#666] leading-relaxed">
+                      This hearing has been postponed per Congress.gov. It will be updated
+                      if rescheduled.
+                    </p>
+                  </div>
+                )}
+                {hearing.status === HearingStatus.CANCELED && (
+                  <div>
+                    <p className="text-sm font-semibold text-[#444] mb-1">Hearing Canceled</p>
+                    <p className="text-xs text-[#666] leading-relaxed">
+                      This hearing has been canceled per Congress.gov.
+                    </p>
+                  </div>
+                )}
+                {/* Hearing metadata */}
+                {(hearing.hearing_type || (hearing.meeting_status && hearing.meeting_status !== "No meeting status")) && (
+                  <div className="mt-3 pt-3 flex flex-wrap gap-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+                    {hearing.hearing_type && (
+                      <span className="text-xs text-[#666]">
+                        <span className="font-semibold text-[#444]">Type:</span> {hearing.hearing_type}
+                      </span>
+                    )}
+                    {hearing.meeting_status && hearing.meeting_status !== "No meeting status" && (
+                      <span className="text-xs text-[#666]">
+                        <span className="font-semibold text-[#444]">Status:</span> {hearing.meeting_status}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Process button if actionable */}
             <div onClick={(e) => e.stopPropagation()}>
               {isActionable && <div className="mb-4"><ProcessButton eventId={hearing.event_id} status={hearing.status} /></div>}
@@ -243,7 +325,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
             {isComplete && hearing.hearing_id && (
               <div className="grid grid-cols-2 gap-3 flex-1 min-h-0" onClick={(e) => e.stopPropagation()}>
                 <div className="rounded-lg p-3 flex flex-col" style={{ background: `${c.accent}05`, border: `1px solid ${c.accent}10` }}>
-                  <p className="text-[9px] font-bold text-[#999] mb-2 uppercase tracking-wider">Audio Brief</p>
+                  <p className="text-xs font-bold text-[#444] mb-2 uppercase tracking-wider">Audio Brief</p>
                   <div className="flex-1 flex items-center">
                     <audio controls preload="none" className="w-full" style={{ height: "32px" }}>
                       <source src={artifactUrl(hearing.event_id, "briefs/generic/audio_brief.mp3")} type="audio/mpeg" />
@@ -251,7 +333,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
                   </div>
                 </div>
                 <div className="rounded-lg p-3 flex flex-col" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                  <p className="text-[9px] font-bold text-[#999] mb-2 uppercase tracking-wider">Video Highlights</p>
+                  <p className="text-xs font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights</p>
                   <video controls preload="none" className="w-full rounded flex-1" style={{ maxHeight: "140px" }}>
                     <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
                   </video>
@@ -273,7 +355,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo }: {
               )}
               {hearing.congress_gov_url && (
                 <a href={hearing.congress_gov_url} target="_blank" rel="noopener"
-                  className="text-xs text-[#aaa] hover:text-[#0039A6] transition-colors">
+                  className="text-xs text-[#444] hover:text-[#0039A6] transition-colors">
                   Congress.gov →
                 </a>
               )}
@@ -321,9 +403,9 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
               <span className="px-2.5 py-1 rounded-lg text-xs font-bold tracking-wider" style={{ background: `${c.accent}0c`, color: c.accent }}>
                 {c.ch}.{c.code}
               </span>
-              <span className="text-sm text-[#888]">{hearing.committee_name}</span>
+              <span className="text-sm text-[#444]">{hearing.committee_name}</span>
               <span className="text-sm text-[#ddd]">/</span>
-              <span className="text-sm text-[#888]">{formatDate(hearing.hearing_date)}</span>
+              <span className="text-sm text-[#444]">{formatDate(hearing.hearing_date)}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-[#111] leading-tight" style={{ letterSpacing: "-0.025em" }}>
               {hearing.title}
@@ -332,7 +414,7 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
           <div className="flex items-center gap-3 flex-shrink-0">
             <StatusBadge status={hearing.status} />
             <button onClick={onClose}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-[#ccc] hover:text-[#666] hover:bg-black/4 transition-all text-lg">
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/4 transition-all text-lg">
               &times;
             </button>
           </div>
@@ -358,7 +440,7 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
                   </div>
                   <div className="flex justify-between">
                     {["Download", "Transcribe", "Speakers", "Analysis"].map((l) => (
-                      <span key={l} className="text-[9px] text-[#bbb] font-medium">{l}</span>
+                      <span key={l} className="text-[9px] text-[#666] font-medium">{l}</span>
                     ))}
                   </div>
                 </div>
@@ -393,13 +475,13 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
               {isComplete && hearing.hearing_id && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="rounded-xl p-4" style={{ background: `${c.accent}04`, border: `1px solid ${c.accent}08` }}>
-                    <p className="text-[11px] font-bold text-[#999] mb-2 uppercase tracking-wider">Audio Brief (~2 min)</p>
+                    <p className="text-[11px] font-bold text-[#444] mb-2 uppercase tracking-wider">Audio Brief (~2 min)</p>
                     <audio controls preload="none" className="w-full h-10">
                       <source src={artifactUrl(hearing.event_id, "briefs/generic/audio_brief.mp3")} type="audio/mpeg" />
                     </audio>
                   </div>
                   <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                    <p className="text-[11px] font-bold text-[#999] mb-2 uppercase tracking-wider">Video Highlights (~60s)</p>
+                    <p className="text-[11px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights (~60s)</p>
                     <video controls preload="none" className="w-full rounded-lg" style={{ maxHeight: "180px" }}>
                       <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
                     </video>
@@ -411,14 +493,14 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
             {/* Right sidebar */}
             <div className="space-y-5">
               <div className="rounded-xl p-5" style={{ background: `${c.accent}03`, border: `1px solid ${c.accent}08` }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#bbb] mb-3">Hearing Info</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#666] mb-3">Hearing Info</p>
                 {[
                   { k: "Committee", v: hearing.committee_name },
                   { k: "Date", v: formatDate(hearing.hearing_date) },
                   { k: "Type", v: hearing.hearing_type || "Hearing" },
                 ].map((r) => (
                   <div key={r.k} className="mb-2.5">
-                    <p className="text-[10px] text-[#aaa] uppercase tracking-wider">{r.k}</p>
+                    <p className="text-[10px] text-[#444] uppercase tracking-wider">{r.k}</p>
                     <p className="text-sm text-[#333] font-medium">{r.v}</p>
                   </div>
                 ))}
@@ -435,12 +517,12 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
 
               {detail?.stages && detail.stages.length > 0 && (
                 <div className="rounded-xl p-5 bg-[#fafafa] border border-[#f0f0f0]">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#bbb] mb-3">Pipeline</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#666] mb-3">Pipeline</p>
                   {detail.stages.map((s: { stage_name: string; completed_at: string | null; error: string | null; duration_seconds: number | null }) => (
                     <div key={s.stage_name} className="flex items-center gap-2 py-1.5">
                       <span className="w-2 h-2 rounded-full" style={{ background: s.error ? "#C0452A" : s.completed_at ? "#72A375" : "#e0e0e0" }} />
                       <span className="text-xs text-[#666] flex-1 capitalize">{s.stage_name.replace(/_/g, " ")}</span>
-                      {s.duration_seconds != null && <span className="text-[11px] text-[#bbb]">{s.duration_seconds < 60 ? `${Math.round(s.duration_seconds)}s` : `${Math.round(s.duration_seconds / 60)}m`}</span>}
+                      {s.duration_seconds != null && <span className="text-[11px] text-[#666]">{s.duration_seconds < 60 ? `${Math.round(s.duration_seconds)}s` : `${Math.round(s.duration_seconds / 60)}m`}</span>}
                     </div>
                   ))}
                 </div>
@@ -476,7 +558,7 @@ function CommitteeDropdown({ committees, selected, onSelect, countMap }: {
         className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300"
         style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
         {selected ? committees.find(c => c.committee_id === selected)?.short_name : "All Committees"}
-        <svg className={`w-3.5 h-3.5 text-[#999] transition-transform duration-200 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+        <svg className={`w-3.5 h-3.5 text-[#444] transition-transform duration-200 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -495,7 +577,7 @@ function CommitteeDropdown({ committees, selected, onSelect, countMap }: {
                 <button key={c.committee_id} onClick={() => { onSelect(c.committee_id); setOpen(false); }}
                   className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${selected === c.committee_id ? "font-bold" : "text-[#444] hover:bg-black/3"}`}
                   style={selected === c.committee_id ? { background: `${cid(c.committee_id).accent}08`, color: cid(c.committee_id).accent } : {}}>
-                  <span>{c.short_name}</span><span className="text-[11px] text-[#bbb]">{countMap.get(c.committee_id) ?? 0}</span>
+                  <span>{c.short_name}</span><span className="text-[11px] text-[#666]">{countMap.get(c.committee_id) ?? 0}</span>
                 </button>
               ))}
             </div>
@@ -590,12 +672,13 @@ function DateFilter({ month, year, onChangeMonth, onChangeYear }: {
 // ─── Card Carousel with dots ──────────────────────────────────────
 
 // CardCarousel — grid + pagination at the bottom
-function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage }: {
+function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage, showFlag }: {
   items: HearingListItem[];
   flippedId: string | null;
   onFlip: (id: string | null) => void;
   onOpenMemo: (id: string) => void;
   perPage: number;
+  showFlag?: boolean;
 }) {
   const [page, setPage] = useState(0);
   const totalPages = Math.ceil(items.length / perPage);
@@ -605,7 +688,7 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage }: {
     <div className="mb-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {visible.map((h, i) => (
-          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} />
+          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} showFlag={showFlag} />
         ))}
       </div>
 
@@ -622,7 +705,7 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage }: {
               <button key={i} onClick={() => setPage(i)} className="rounded-full transition-all duration-300"
                 style={{ width: page === i ? "20px" : "6px", height: "6px", background: page === i ? "#0039A6" : "rgba(0,0,0,0.15)" }} />
             ))}
-            {totalPages > 10 && <span className="text-[10px] text-[#999]">+{totalPages - 10}</span>}
+            {totalPages > 10 && <span className="text-[10px] text-[#444]">+{totalPages - 10}</span>}
           </div>
           {/* Right chevron */}
           <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page === totalPages - 1}
@@ -705,7 +788,7 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
                 style={{ background: `${c.accent}12`, color: c.accent }}>
                 {c.ch}.{c.code}
               </span>
-              <span className="text-xs text-[#999] truncate">{hearing.committee_name}</span>
+              <span className="text-xs text-[#444] truncate">{hearing.committee_name}</span>
             </div>
 
             {/* Date + title */}
@@ -720,7 +803,7 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
             {hearing.hearing_id && (
               <div className="space-y-3 mb-4">
                 <div className="rounded-xl p-4" style={{ background: `${c.accent}04`, border: `1px solid ${c.accent}08` }}>
-                  <p className="text-[10px] font-bold text-[#999] mb-2 uppercase tracking-wider">Audio Brief</p>
+                  <p className="text-[10px] font-bold text-[#444] mb-2 uppercase tracking-wider">Audio Brief</p>
                   <audio controls preload="none" className="w-full" style={{ height: "36px" }}>
                     <source src={artifactUrl(hearing.event_id, "briefs/generic/audio_brief.mp3")} type="audio/mpeg" />
                   </audio>
@@ -728,7 +811,7 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
 
                 {/* Video Highlights */}
                 <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                  <p className="text-[10px] font-bold text-[#999] mb-2 uppercase tracking-wider">Video Highlights</p>
+                  <p className="text-[10px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights</p>
                   <video controls preload="none" className="w-full rounded-lg">
                     <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
                   </video>
@@ -758,10 +841,10 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
           <div className="px-8 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-bold text-[#1a1a1a]" style={{ letterSpacing: "-0.02em" }}>Briefing Memo</h2>
-              <span className="text-xs text-[#bbb]">{formatDate(hearing.hearing_date)}</span>
+              <span className="text-xs text-[#666]">{formatDate(hearing.hearing_date)}</span>
             </div>
             <button onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#ccc] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
               ×
             </button>
           </div>
@@ -772,61 +855,6 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Upcoming Card (This Week's Hearings — with flag toggle) ─────
-
-function UpcomingCard({ hearing, index }: { hearing: HearingListItem; index: number }) {
-  const c = cid(hearing.committee_id);
-  const [flagged, setFlagged] = useState(false);
-
-  return (
-    <div
-      className="card-enter rounded-lg p-4 flex flex-col transition-all duration-300"
-      style={{
-        animationDelay: `${index * 40}ms`,
-        background: flagged ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.45)",
-        backdropFilter: "blur(16px)",
-        border: flagged ? `1px solid ${c.accent}30` : "1px solid rgba(255,255,255,0.35)",
-        boxShadow: flagged ? `0 4px 16px ${c.accent}10` : "none",
-      }}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider"
-          style={{ background: `${c.accent}10`, color: c.accent }}>
-          {c.ch}.{c.code}
-        </span>
-        {/* Flag/bookmark toggle */}
-        <button
-          onClick={(e) => { e.stopPropagation(); setFlagged(!flagged); }}
-          className="transition-all duration-200 hover:scale-110"
-          title={flagged ? "Remove flag — won't auto-process" : "Flag — auto-process when available"}
-        >
-          {flagged ? (
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill={c.accent} stroke={c.accent} strokeWidth="1.5">
-              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5 text-[#ccc] hover:text-[#999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          )}
-        </button>
-      </div>
-      <p className="text-lg font-bold text-[#1a1a1a] mb-1" style={{ letterSpacing: "-0.02em" }}>
-        {shortDate(hearing.hearing_date)}
-      </p>
-      <p className="text-[12px] text-[#666] leading-snug flex-1">
-        {summarizeTitle(hearing.title, 90)}
-      </p>
-      {flagged && (
-        <div className="mt-2 pt-2 flex items-center gap-1.5" style={{ borderTop: `1px solid ${c.accent}10` }}>
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.accent }} />
-          <span className="text-[10px] font-semibold" style={{ color: c.accent }}>Will auto-process</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -916,25 +944,25 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
       </div>
 
       {/* ─── Content ─── */}
-      <div className="relative z-10 max-w-[1200px] mx-auto px-8 pt-8 pb-16">
+      <div className="relative z-10 max-w-[1400px] mx-auto px-8 pt-8 pb-16">
         {/* Header — branding + three uniform dropdowns */}
         <div className="flex items-end justify-between mb-10">
           <div className="stat-enter" style={{ animationDelay: "0ms" }}>
-            <h1 className="font-brand text-3xl font-bold" style={{ letterSpacing: "-0.04em" }}>
+            <h1 className="font-brand text-5xl font-extrabold" style={{ letterSpacing: "-0.04em" }}>
               <span style={{ color: "#0039A6" }}>Read</span><span style={{ color: "#72A375" }}>out</span>
             </h1>
             {/* Page nav */}
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-2 mt-2">
               {([
                 { id: "dashboard" as Page, label: "Dashboard" },
                 { id: "saved" as Page, label: "Saved" },
                 { id: "configure" as Page, label: "Configure" },
               ]).map((p) => (
                 <button key={p.id} onClick={() => setPage(p.id)}
-                  className="px-3 py-1 text-[12px] font-semibold rounded-lg transition-all duration-200"
+                  className="px-3 py-1 text-sm font-semibold rounded-lg transition-all duration-200"
                   style={{
                     background: page === p.id ? "rgba(0,57,166,0.08)" : "transparent",
-                    color: page === p.id ? "#0039A6" : "#999",
+                    color: page === p.id ? "#0039A6" : "#444",
                   }}>
                   {p.label}
                 </button>
@@ -957,7 +985,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
             <p className="text-lg font-bold text-[#555] mb-2">No saved hearings yet</p>
-            <p className="text-sm text-[#999] max-w-sm">Flag upcoming hearings from the dashboard to save them here. Flagged hearings auto-process when video becomes available.</p>
+            <p className="text-sm text-[#444] max-w-sm">Flag upcoming hearings from the dashboard to save them here. Flagged hearings auto-process when video becomes available.</p>
           </div>
         )}
 
@@ -965,9 +993,9 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {page === "configure" && (
           <div className="max-w-lg">
             <h2 className="text-xl font-bold text-[#1a1a1a] mb-2">Topic Alerts</h2>
-            <p className="text-sm text-[#888] mb-6">Add keywords to automatically flag hearings that match your interests.</p>
+            <p className="text-sm text-[#444] mb-6">Add keywords to automatically flag hearings that match your interests.</p>
             <div className="rounded-xl p-6" style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)" }}>
-              <p className="text-[11px] font-bold text-[#aaa] uppercase tracking-wider mb-3">Keywords</p>
+              <p className="text-[11px] font-bold text-[#444] uppercase tracking-wider mb-3">Keywords</p>
               <div className="flex flex-wrap gap-2 mb-4">
                 {["stablecoin", "CFPB", "digital assets"].map((kw) => (
                   <span key={kw} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#0039A6]/8 text-[#0039A6]">
@@ -978,8 +1006,8 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <input type="text" placeholder="Add keyword..." className="w-full px-4 py-2.5 rounded-lg text-sm border border-[#e0e0e0] bg-white/80 focus:outline-none focus:border-[#0039A6] transition-colors" />
             </div>
             <div className="mt-6 rounded-xl p-6" style={{ background: "rgba(255,255,255,0.4)", border: "1px dashed rgba(0,0,0,0.1)" }}>
-              <p className="text-sm font-semibold text-[#888] mb-1">Multi-Client Keywords</p>
-              <p className="text-xs text-[#aaa] mb-3">Set different keyword lists for each of your clients.</p>
+              <p className="text-sm font-semibold text-[#444] mb-1">Multi-Client Keywords</p>
+              <p className="text-xs text-[#444] mb-3">Set different keyword lists for each of your clients.</p>
               <button className="px-4 py-2 text-xs font-bold rounded-lg text-white" style={{ background: "linear-gradient(135deg, #0039A6, #4A90C2)" }}>
                 Upgrade to Pro
               </button>
@@ -999,11 +1027,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#4A90C2", background: "rgba(74,144,194,0.1)" }}>{upcoming.length}</span>
               <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(74,144,194,0.2), transparent)" }} />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {upcoming.slice(0, 8).map((h, i) => (
-                <UpcomingCard key={h.event_id} hearing={h} index={i} />
-              ))}
-            </div>
+            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
           </div>
         )}
 
@@ -1021,7 +1045,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
 
         {/* Processing — accordion, 3 rows when open */}
         {inProgress.length > 0 && (
-          <Accordion label="Processing" count={inProgress.length} color="#B8860B">
+          <Accordion label="Processing" count={inProgress.length} color="#7B5EA7">
             <CardCarousel items={inProgress} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
           </Accordion>
         )}
@@ -1034,7 +1058,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         )}
 
         {hearings.length === 0 && (
-          <div className="flex items-center justify-center h-64 text-[#999]">No hearings found{committeeFilter ? " for this committee" : ""}.</div>
+          <div className="flex items-center justify-center h-64 text-[#444]">No hearings found{committeeFilter ? " for this committee" : ""}.</div>
         )}
         </>)}
 

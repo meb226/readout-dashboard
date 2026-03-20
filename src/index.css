@@ -7,8 +7,8 @@
   --color-green: #72A375;
   --color-green-light: rgba(114, 163, 117, 0.08);
   --color-green-bright: #8FCF92;
-  --color-amber: #B8860B;
-  --color-amber-light: rgba(184, 134, 11, 0.08);
+  --color-amber: #7B5EA7;
+  --color-amber-light: rgba(123, 94, 167, 0.08);
   --color-red: #C0452A;
   --color-red-light: rgba(192, 69, 42, 0.08);
 
@@ -16,13 +16,13 @@
   --color-surface: #FFFFFF;
   --color-border: #E0E0E0;
   --color-text: #1a1a1a;
-  --color-text-muted: #666666;
-  --color-text-faint: #999999;
+  --color-text-muted: #444444;
+  --color-text-faint: #666666;
 
-  /* Font families — Instrument Sans primary */
+  /* Font families — Inter primary */
   --font-brand: 'Outfit', sans-serif;
-  --font-heading: 'Instrument Sans', sans-serif;
-  --font-body: 'Instrument Sans', sans-serif;
+  --font-heading: 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
   --font-serif: 'Source Serif 4', Georgia, serif;
 }
 
