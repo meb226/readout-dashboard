@@ -588,20 +588,6 @@ function CommitteeDropdown({ committees, selected, onSelect, countMap }: {
   );
 }
 
-// ─── Section Header ───────────────────────────────────────────────
-
-function Section({ label, count, color }: { label: string; count: number; color: string }) {
-  if (count === 0) return null;
-  return (
-    <div className="flex items-center gap-3 mb-4 mt-10 first:mt-0">
-      <div className="w-1.5 h-5 rounded-full" style={{ background: color }} />
-      <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color }}>{label}</h2>
-      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color, background: `${color}15` }}>{count}</span>
-      <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${color}20, transparent)` }} />
-    </div>
-  );
-}
-
 // ─── Stat Pill ────────────────────────────────────────────────────
 
 
