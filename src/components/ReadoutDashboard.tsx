@@ -896,24 +896,48 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     hearings = hearings.filter((h) => h.hearing_date.slice(5, 7) === monthFilter);
   }
 
-  const ready = hearings.filter((h) => h.status === HearingStatus.READY);
-  const complete = hearings.filter((h) => h.status === HearingStatus.COMPLETE);
-  const inProgress = hearings.filter((h) => h.status === HearingStatus.PREPARING || h.status === HearingStatus.PROCESSING);
-
-  // This week's upcoming hearings — detected/resolved with dates in the current week
+  // ── Time-based grouping ──
   const now = new Date();
-  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
-  const upcoming = hearings.filter((h) => {
-    if (h.status !== HearingStatus.DETECTED && h.status !== HearingStatus.RESOLVED) return false;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Monday-based week (Mon–Sun)
+  const dayOfWeek = now.getDay(); // 0 = Sunday
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() + mondayOffset);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+
+  // 1. This Week — hearing_date falls within current Mon–Sun week
+  const thisWeek = hearings.filter((h) => {
     const d = new Date(h.hearing_date);
     return d >= weekStart && d < weekEnd;
   });
+  const thisWeekIds = new Set(thisWeek.map((h) => h.event_id));
+
+  // 2. Upcoming — scheduled hearings beyond this week (future)
+  const upcoming = hearings.filter((h) => {
+    if (thisWeekIds.has(h.event_id)) return false;
+    const d = new Date(h.hearing_date);
+    return d >= weekEnd;
+  });
   const upcomingIds = new Set(upcoming.map((h) => h.event_id));
 
-  const rest = hearings.filter((h) =>
-    !([HearingStatus.READY, HearingStatus.COMPLETE, HearingStatus.PREPARING, HearingStatus.PROCESSING] as HearingStatus[]).includes(h.status)
-    && !upcomingIds.has(h.event_id)
+  // 3. Recent — completed memos from the past ~30 days (before this week)
+  const recent = hearings.filter((h) => {
+    if (thisWeekIds.has(h.event_id) || upcomingIds.has(h.event_id)) return false;
+    if (h.status !== HearingStatus.COMPLETE) return false;
+    const d = new Date(h.hearing_date);
+    return d >= thirtyDaysAgo && d < weekStart;
+  });
+  const recentIds = new Set(recent.map((h) => h.event_id));
+
+  // 4. Older — everything else (>30 days old, or past but not yet complete)
+  const older = hearings.filter((h) =>
+    !thisWeekIds.has(h.event_id) && !upcomingIds.has(h.event_id) && !recentIds.has(h.event_id)
   );
 
   return (
@@ -1018,42 +1042,37 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {/* ─── Dashboard Content ─── */}
         {page !== "dashboard" ? null : (<>
 
-        {/* This Week's Hearings — upcoming, with flag toggles */}
-        {upcoming.length > 0 && (
+        {/* This Week's Hearings — primary focus, top of page */}
+        {thisWeek.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-1.5 h-5 rounded-full" style={{ background: "#4A90C2" }} />
               <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#4A90C2" }}>This Week's Hearings</h2>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#4A90C2", background: "rgba(74,144,194,0.1)" }}>{upcoming.length}</span>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#4A90C2", background: "rgba(74,144,194,0.1)" }}>{thisWeek.length}</span>
               <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(74,144,194,0.2), transparent)" }} />
             </div>
-            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
+            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
           </div>
         )}
 
-        {/* Action Required — 2 rows */}
-        <Section label="Action Required" count={ready.length} color="#0039A6" />
-        {ready.length > 0 && (
-          <CardCarousel items={ready} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
-        )}
-
-        {/* Briefings Ready — 2 rows */}
-        <Section label="Briefings Ready" count={complete.length} color="#5a8a5d" />
-        {complete.length > 0 && (
-          <CardCarousel items={complete} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
-        )}
-
-        {/* Processing — accordion, 3 rows when open */}
-        {inProgress.length > 0 && (
-          <Accordion label="Processing" count={inProgress.length} color="#7B5EA7">
-            <CardCarousel items={inProgress} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+        {/* Upcoming — scheduled hearings beyond this week */}
+        {upcoming.length > 0 && (
+          <Accordion label="Upcoming" count={upcoming.length} color="#0039A6">
+            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
           </Accordion>
         )}
 
-        {/* In Pipeline — accordion, 3 rows when open */}
-        {rest.length > 0 && (
-          <Accordion label="In Pipeline" count={rest.length} color="#555">
-            <CardCarousel items={rest} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+        {/* Recent — completed memos from the past ~30 days */}
+        {recent.length > 0 && (
+          <Accordion label="Recent" count={recent.length} color="#5a8a5d">
+            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+          </Accordion>
+        )}
+
+        {/* Older — hearings older than 30 days */}
+        {older.length > 0 && (
+          <Accordion label="Older" count={older.length} color="#555">
+            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
           </Accordion>
         )}
 
