@@ -989,7 +989,6 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
 
           {page === "dashboard" && (
             <div className="flex items-center gap-2">
-              {committees && <CommitteeDropdown committees={committees} selected={committeeFilter} onSelect={setCommitteeFilter} countMap={countMap} />}
               <div className="relative">
                 <input
                   type="text"
@@ -1003,6 +1002,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                   <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#999] hover:text-[#444] text-sm font-bold leading-none" style={{ background: "none", border: "none", cursor: "pointer" }}>×</button>
                 )}
               </div>
+              {committees && <CommitteeDropdown committees={committees} selected={committeeFilter} onSelect={setCommitteeFilter} countMap={countMap} />}
               <DateFilter month={monthFilter} year={yearFilter} onChangeMonth={setMonthFilter} onChangeYear={setYearFilter} />
             </div>
           )}
