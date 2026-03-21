@@ -15,6 +15,7 @@ import type { HearingListItem, CommitteeInfo } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
 import { ProcessButton } from "./ProcessButton";
 import { artifactUrl, fetchMemo } from "../api/client";
+import { downloadMemoAsDocx } from "../utils/memoToDocx";
 import { MemoViewer } from "./MemoViewer";
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -834,13 +835,8 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
                 onClick={async () => {
                   try {
                     const content = await fetchMemo(hearing.event_id);
-                    const blob = new Blob([content], { type: "text/markdown" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${hearing.committee_id}_${hearing.hearing_date}_memo.md`;
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    const filename = `${hearing.committee_id}_${hearing.hearing_date}_memo.docx`;
+                    await downloadMemoAsDocx(content, filename);
                   } catch (e) {
                     console.error("Download failed:", e);
                   }
