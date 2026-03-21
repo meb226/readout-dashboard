@@ -706,10 +706,10 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage, showFlag 
 
 // ─── Accordion ────────────────────────────────────────────────────
 
-function Accordion({ label, count, color, children }: {
-  label: string; count: number; color: string; children: React.ReactNode;
+function Accordion({ label, count, color, children, defaultOpen = false }: {
+  label: string; count: number; color: string; children: React.ReactNode; defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div className="mt-8">
@@ -1089,17 +1089,11 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           </div>
         ) : (<>
 
-        {/* This Week's Hearings — primary focus, top of page */}
+        {/* This Week's Hearings — primary focus, top of page (starts expanded) */}
         {thisWeek.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-1.5 h-5 rounded-full" style={{ background: "#4A90C2" }} />
-              <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#4A90C2" }}>This Week's Hearings</h2>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#4A90C2", background: "rgba(74,144,194,0.1)" }}>{thisWeek.length}</span>
-              <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(74,144,194,0.2), transparent)" }} />
-            </div>
+          <Accordion label="This Week's Hearings" count={thisWeek.length} color="#4A90C2" defaultOpen>
             <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
-          </div>
+          </Accordion>
         )}
 
         {/* Upcoming — scheduled hearings beyond this week */}
