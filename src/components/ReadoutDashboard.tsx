@@ -14,7 +14,7 @@ import { HearingStatus } from "../types/api";
 import type { HearingListItem, CommitteeInfo } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
 import { ProcessButton } from "./ProcessButton";
-import { artifactUrl } from "../api/client";
+import { artifactUrl, fetchMemo } from "../api/client";
 import { MemoViewer } from "./MemoViewer";
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -829,10 +829,35 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
               <h2 className="text-lg font-bold text-[#1a1a1a]" style={{ letterSpacing: "-0.02em" }}>Briefing Memo</h2>
               <span className="text-xs text-[#666]">{formatDate(hearing.hearing_date)}</span>
             </div>
-            <button onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const content = await fetchMemo(hearing.event_id);
+                    const blob = new Blob([content], { type: "text/markdown" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${hearing.committee_id}_${hearing.hearing_date}_memo.md`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (e) {
+                    console.error("Download failed:", e);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-80"
+                style={{ background: "#0039A6" }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+                </svg>
+                Download
+              </button>
+              <button onClick={onClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Memo content — scrollable */}
