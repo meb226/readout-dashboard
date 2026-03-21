@@ -861,6 +861,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const [yearFilter, setYearFilter] = useState<string | null>(null);
   const [flippedId, setFlippedId] = useState<string | null>(null);
   const [memoHearingId, setMemoHearingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const { data: committees } = useCommittees();
   const { data } = useHearings({ committee_id: committeeFilter ?? undefined, limit: 250 });
 
@@ -880,6 +881,12 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     hearings = hearings.filter((h) => h.hearing_date.startsWith(`${yearFilter}-${monthFilter}`));
   } else if (monthFilter) {
     hearings = hearings.filter((h) => h.hearing_date.slice(5, 7) === monthFilter);
+  }
+
+  // ML-317: Search filter
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    hearings = hearings.filter((h) => h.title.toLowerCase().includes(q));
   }
 
   // ── Time-based grouping ──
@@ -983,6 +990,19 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           {page === "dashboard" && (
             <div className="flex items-center gap-2">
               {committees && <CommitteeDropdown committees={committees} selected={committeeFilter} onSelect={setCommitteeFilter} countMap={countMap} />}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search hearing titles..."
+                  className="text-sm pr-8 pl-3 py-2 rounded-lg focus:outline-none focus:border-[#0039A6] transition-colors"
+                  style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)", boxShadow: "0 2px 10px rgba(0,0,0,0.04)", width: 220 }}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#999] hover:text-[#444] text-sm font-bold leading-none" style={{ background: "none", border: "none", cursor: "pointer" }}>×</button>
+                )}
+              </div>
               <DateFilter month={monthFilter} year={yearFilter} onChangeMonth={setMonthFilter} onChangeYear={setYearFilter} />
             </div>
           )}
@@ -1026,7 +1046,23 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         )}
 
         {/* ─── Dashboard Content ─── */}
-        {page !== "dashboard" ? null : (<>
+        {page !== "dashboard" ? null : searchQuery ? (
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-1.5 h-5 rounded-full" style={{ background: "#0039A6" }} />
+              <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#0039A6" }}>Search Results</h2>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#0039A6", background: "rgba(0,57,166,0.1)" }}>{hearings.length}</span>
+              <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
+            </div>
+            {hearings.length > 0 ? (
+              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+            ) : (
+              <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(255,255,255,0.35)", border: "1px dashed rgba(0,57,166,0.12)" }}>
+                <p className="text-sm font-medium text-[#666]">No hearings match "{searchQuery}"</p>
+              </div>
+            )}
+          </div>
+        ) : (<>
 
         {/* This Week's Hearings — primary focus, top of page */}
         {thisWeek.length > 0 && (
