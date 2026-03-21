@@ -340,7 +340,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, showFlag = false 
                 {hearing.has_video && !videoError && (
                   <div className="rounded-lg p-3 flex flex-col" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
                     <p className="text-xs font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights</p>
-                    <video controls preload="none" className="w-full rounded flex-1" style={{ maxHeight: "140px" }} onError={() => setVideoError(true)}>
+                    <video controls preload="none" className="w-full rounded aspect-video" onError={() => setVideoError(true)}>
                       <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
                     </video>
                   </div>
@@ -497,7 +497,7 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
                   {hearing.has_video && !videoError && (
                     <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
                       <p className="text-[11px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights (~60s)</p>
-                      <video controls preload="none" className="w-full rounded-lg" style={{ maxHeight: "180px" }} onError={() => setVideoError(true)}>
+                      <video controls preload="none" className="w-full rounded-lg aspect-video" onError={() => setVideoError(true)}>
                         <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
                       </video>
                     </div>
