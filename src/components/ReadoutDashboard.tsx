@@ -14,7 +14,8 @@ import { HearingStatus } from "../types/api";
 import type { HearingListItem, CommitteeInfo } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
 import { ProcessButton } from "./ProcessButton";
-import { artifactUrl } from "../api/client";
+import { artifactUrl, fetchMemo } from "../api/client";
+import { downloadMemoAsDocx } from "../utils/memoToDocx";
 import { MemoViewer } from "./MemoViewer";
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -706,10 +707,10 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage, showFlag 
 
 // ─── Accordion ────────────────────────────────────────────────────
 
-function Accordion({ label, count, color, children }: {
-  label: string; count: number; color: string; children: React.ReactNode;
+function Accordion({ label, count, color, children, defaultOpen = false }: {
+  label: string; count: number; color: string; children: React.ReactNode; defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div className="mt-8">
@@ -829,10 +830,30 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
               <h2 className="text-lg font-bold text-[#1a1a1a]" style={{ letterSpacing: "-0.02em" }}>Briefing Memo</h2>
               <span className="text-xs text-[#666]">{formatDate(hearing.hearing_date)}</span>
             </div>
-            <button onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const content = await fetchMemo(hearing.event_id);
+                    const filename = `${hearing.committee_id}_${hearing.hearing_date}_memo.docx`;
+                    await downloadMemoAsDocx(content, filename);
+                  } catch (e) {
+                    console.error("Download failed:", e);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-80"
+                style={{ background: "#0039A6" }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+                </svg>
+                Download
+              </button>
+              <button onClick={onClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Memo content — scrollable */}
@@ -1064,17 +1085,11 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           </div>
         ) : (<>
 
-        {/* This Week's Hearings — primary focus, top of page */}
+        {/* This Week's Hearings — primary focus, top of page (starts expanded) */}
         {thisWeek.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-1.5 h-5 rounded-full" style={{ background: "#4A90C2" }} />
-              <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#4A90C2" }}>This Week's Hearings</h2>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#4A90C2", background: "rgba(74,144,194,0.1)" }}>{thisWeek.length}</span>
-              <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(74,144,194,0.2), transparent)" }} />
-            </div>
+          <Accordion label="This Week's Hearings" count={thisWeek.length} color="#4A90C2" defaultOpen>
             <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
-          </div>
+          </Accordion>
         )}
 
         {/* Upcoming — scheduled hearings beyond this week */}
