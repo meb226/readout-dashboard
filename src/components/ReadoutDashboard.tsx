@@ -1158,10 +1158,6 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {/* ─── Saved Page ─── */}
         {page === "saved" && (() => {
           const saved = allHearings.filter((h) => savedIds.has(h.event_id));
-          const upcomingStatuses: HearingStatus[] = [HearingStatus.DETECTED, HearingStatus.RESOLVED, HearingStatus.READY, HearingStatus.PREPARING];
-          const savedUpcoming = saved.filter((h) => upcomingStatuses.includes(h.status));
-          const savedProcessing = saved.filter((h) => h.status === HearingStatus.PROCESSING);
-          const savedComplete = saved.filter((h) => h.status === HearingStatus.COMPLETE);
 
           if (saved.length === 0) return (
             <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -1173,23 +1169,9 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
             </div>
           );
 
-          return (<>
-            {savedUpcoming.length > 0 && (
-              <Accordion label="Upcoming" count={savedUpcoming.length} color="#0039A6" defaultOpen>
-                <CardCarousel items={savedUpcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
-              </Accordion>
-            )}
-            {savedProcessing.length > 0 && (
-              <Accordion label="Processing" count={savedProcessing.length} color="#7C3AED" defaultOpen>
-                <CardCarousel items={savedProcessing} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
-              </Accordion>
-            )}
-            {savedComplete.length > 0 && (
-              <Accordion label="Complete" count={savedComplete.length} color="#5a8a5d" defaultOpen>
-                <CardCarousel items={savedComplete} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
-              </Accordion>
-            )}
-          </>);
+          return (
+            <CardCarousel items={saved} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+          );
         })()}
 
         {/* ─── Configure Page Stub ─── */}
@@ -1215,6 +1197,21 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                 Upgrade to Pro
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ─── Loading Skeleton ─── */}
+        {page === "dashboard" && isLoading && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="rounded-2xl p-6 animate-pulse" style={{ background: "rgba(255,255,255,0.45)", minHeight: 260, animationDelay: `${i * 60}ms` }}>
+                <div className="h-3 w-16 rounded bg-[#ddd] mb-3" />
+                <div className="h-5 w-3/4 rounded bg-[#ddd] mb-2" />
+                <div className="h-4 w-full rounded bg-[#e8e8e8] mb-1" />
+                <div className="h-4 w-2/3 rounded bg-[#e8e8e8]" />
+                <div className="mt-auto pt-8"><div className="h-3 w-20 rounded bg-[#ddd]" /></div>
+              </div>
+            ))}
           </div>
         )}
 
