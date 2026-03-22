@@ -95,6 +95,16 @@ export function artifactUrl(eventId: string, artifactPath: string): string {
   return `${API_BASE}/api/hearings/${eventId}/artifacts/${artifactPath}`;
 }
 
+// --- Keyword Counts (ML-311) ---
+
+export async function fetchKeywordCounts(
+  eventId: string,
+  keywords: string[],
+): Promise<Record<string, number>> {
+  const qs = new URLSearchParams({ keywords: keywords.join(",") });
+  return apiFetch(`/api/hearings/${eventId}/keyword-counts?${qs}`);
+}
+
 // --- Stats & Committees ---
 
 export async function fetchStats(): Promise<DashboardStats> {

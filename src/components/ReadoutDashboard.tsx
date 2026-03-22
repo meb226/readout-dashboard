@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useHearings } from "../hooks/useHearings";
 import { useCommittees } from "../hooks/useCommittees";
 import { useHearingDetail } from "../hooks/useHearingDetail";
+import { useKeywordCounts } from "../hooks/useKeywordCounts";
 import { HearingStatus } from "../types/api";
 import type { HearingListItem, HearingListResponse, CommitteeInfo } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
@@ -115,8 +116,8 @@ const GLOBAL_STYLES = `
 
 // ─── Flip Card ────────────────────────────────────────────────────
 
-function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript, showFlag = false, isFlagged = false, onToggleFlag }: {
-  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; onOpenTranscript: (id: string) => void; showFlag?: boolean; isFlagged?: boolean; onToggleFlag?: (eventId: string) => void;
+function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript, showFlag = false, isFlagged = false, onToggleFlag, matchedKeywords = [], keywordCounts }: {
+  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; onOpenTranscript: (id: string) => void; showFlag?: boolean; isFlagged?: boolean; onToggleFlag?: (eventId: string) => void; matchedKeywords?: string[]; keywordCounts?: Record<string, number>;
 }) {
   const c = cid(hearing.committee_id);
   const isComplete = hearing.status === HearingStatus.COMPLETE;
@@ -202,6 +203,18 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
             <p className="text-[15px] text-[#555] leading-snug flex-1" title={hearing.title}>
               {summarizeTitle(hearing.title, 160)}
             </p>
+            {matchedKeywords.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {matchedKeywords.slice(0, 2).map((kw) => {
+                  const count = keywordCounts?.[kw];
+                  return (
+                    <span key={kw} className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(0,57,166,0.08)", color: "#0039A6" }}>
+                      {kw}{count != null && count > 0 ? ` (${count})` : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             <div className="mt-3 pt-2 flex items-center" style={{ borderTop: "1px solid rgba(0,0,0,0.04)" }}>
               {isComplete && (
                 <div className="flex items-center gap-2">
@@ -686,7 +699,7 @@ function DateFilter({ month, year, onChangeMonth, onChangeYear }: {
 // ─── Card Carousel with dots ──────────────────────────────────────
 
 // CardCarousel — grid + pagination at the bottom
-function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, perPage, showFlag, savedIds, onToggleFlag }: {
+function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, perPage, showFlag, savedIds, onToggleFlag, matchKeywords, keywordCounts }: {
   items: HearingListItem[];
   flippedId: string | null;
   onFlip: (id: string | null) => void;
@@ -696,6 +709,8 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, 
   showFlag?: boolean;
   savedIds?: Set<string>;
   onToggleFlag?: (eventId: string) => void;
+  matchKeywords?: (title: string) => string[];
+  keywordCounts?: Map<string, Record<string, number>>;
 }) {
   const [page, setPage] = useState(0);
   const totalPages = Math.ceil(items.length / perPage);
@@ -705,7 +720,7 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, 
     <div className="mb-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {visible.map((h, i) => (
-          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} onOpenTranscript={onOpenTranscript} showFlag={showFlag} isFlagged={savedIds?.has(h.event_id)} onToggleFlag={onToggleFlag} />
+          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} onOpenTranscript={onOpenTranscript} showFlag={showFlag} isFlagged={savedIds?.has(h.event_id)} onToggleFlag={onToggleFlag} matchedKeywords={matchKeywords?.(h.title)} keywordCounts={keywordCounts?.get(h.event_id)} />
         ))}
       </div>
 
@@ -988,7 +1003,7 @@ interface Props {
   selectedEventId: string | null;
 }
 
-type Page = "dashboard" | "saved" | "configure";
+type Page = "dashboard" | "saved" | "matches" | "configure";
 
 export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEventId: _selectedEventId }: Props) {
   const [page, setPage] = useState<Page>("dashboard");
@@ -999,6 +1014,10 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const [memoHearingId, setMemoHearingId] = useState<string | null>(null);
   const [transcriptHearingId, setTranscriptHearingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [keywords, setKeywords] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("readout_keywords") ?? "[]"); } catch { return []; }
+  });
+  const [keywordInput, setKeywordInput] = useState("");
   const queryClient = useQueryClient();
   const { data: committees } = useCommittees();
   const { data, isLoading } = useHearings({ limit: 250 });
@@ -1043,6 +1062,31 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     const q = searchQuery.toLowerCase();
     hearings = hearings.filter((h) => h.title.toLowerCase().includes(q));
   }
+
+  // ── ML-311: Keyword helpers ──
+  const saveKeywords = (kws: string[]) => {
+    setKeywords(kws);
+    localStorage.setItem("readout_keywords", JSON.stringify(kws));
+  };
+  const addKeyword = (raw: string) => {
+    const kw = raw.trim();
+    if (kw.length < 2) return;
+    if (keywords.some((k) => k.toLowerCase() === kw.toLowerCase())) return;
+    saveKeywords([...keywords, kw]);
+    setKeywordInput("");
+  };
+  const removeKeyword = (kw: string) => {
+    saveKeywords(keywords.filter((k) => k !== kw));
+  };
+  const matchKeywords = (title: string): string[] => {
+    if (keywords.length === 0) return [];
+    const t = title.toLowerCase();
+    return keywords.filter((kw) => t.includes(kw.toLowerCase()));
+  };
+  const matchedEventIds = allHearings
+    .filter((h) => matchKeywords(h.title).length > 0)
+    .map((h) => h.event_id);
+  const keywordCountsMap = useKeywordCounts(matchedEventIds, keywords);
 
   // ── Time-based grouping ──
   const now = new Date();
@@ -1128,6 +1172,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               {([
                 { id: "dashboard" as Page, label: "Dashboard" },
                 { id: "saved" as Page, label: "Saved" },
+                { id: "matches" as Page, label: "Matches" },
                 { id: "configure" as Page, label: "Configure" },
               ]).map((p) => (
                 <button key={p.id} onClick={() => setPage(p.id)}
@@ -1139,6 +1184,12 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                   {p.label}
                   {p.id === "saved" && savedIds.size > 0 && (
                     <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#0039A6] text-white leading-none">{savedIds.size}</span>
+                  )}
+                  {p.id === "matches" && matchedEventIds.length > 0 && (
+                    <span className="ml-1 text-[10px] opacity-60">({matchedEventIds.length})</span>
+                  )}
+                  {p.id === "configure" && keywords.length > 0 && (
+                    <span className="ml-1 text-[10px] opacity-60">({keywords.length})</span>
                   )}
                 </button>
               ))}
@@ -1181,25 +1232,77 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           );
 
           return (
-            <CardCarousel items={saved} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+            <CardCarousel items={saved} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           );
         })()}
 
-        {/* ─── Configure Page Stub ─── */}
+        {/* ─── Matches Page (ML-311) ─── */}
+        {page === "matches" && (
+          (() => {
+            const matched = allHearings.filter((h) => matchKeywords(h.title).length > 0);
+            return matched.length > 0 ? (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-1.5 h-5 rounded-full" style={{ background: "#0039A6" }} />
+                  <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#0039A6" }}>Keyword Matches</h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#0039A6", background: "rgba(0,57,166,0.1)" }}>{matched.length}</span>
+                  <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
+                </div>
+                <CardCarousel items={matched} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <svg className="w-16 h-16 text-[#ddd] mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <p className="text-lg font-bold text-[#555] mb-2">No keyword matches</p>
+                <p className="text-sm text-[#444] max-w-sm">
+                  {keywords.length === 0
+                    ? "Add keywords on the Configure page to see matching hearings here."
+                    : "None of the current hearings match your keywords. Matches will appear as new hearings are detected."}
+                </p>
+                {keywords.length === 0 && (
+                  <button onClick={() => setPage("configure")} className="mt-4 px-4 py-2 text-sm font-semibold rounded-lg" style={{ background: "rgba(0,57,166,0.08)", color: "#0039A6" }}>
+                    Configure Keywords
+                  </button>
+                )}
+              </div>
+            );
+          })()
+        )}
+
+        {/* ─── Configure Page (ML-311) ─── */}
         {page === "configure" && (
           <div className="max-w-lg">
             <h2 className="text-xl font-bold text-[#1a1a1a] mb-2">Topic Alerts</h2>
             <p className="text-sm text-[#444] mb-6">Add keywords to automatically flag hearings that match your interests.</p>
             <div className="rounded-xl p-6" style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)" }}>
               <p className="text-[11px] font-bold text-[#444] uppercase tracking-wider mb-3">Keywords</p>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {["stablecoin", "CFPB", "digital assets"].map((kw) => (
-                  <span key={kw} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#0039A6]/8 text-[#0039A6]">
-                    {kw} <span className="ml-1 cursor-pointer opacity-50 hover:opacity-100">×</span>
-                  </span>
-                ))}
-              </div>
-              <input type="text" placeholder="Add keyword..." className="w-full px-4 py-2.5 rounded-lg text-sm border border-[#e0e0e0] bg-white/80 focus:outline-none focus:border-[#0039A6] transition-colors" />
+              {keywords.length > 0 ? (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {keywords.map((kw) => (
+                    <span key={kw} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "rgba(0,57,166,0.08)", color: "#0039A6" }}>
+                      {kw}
+                      <button onClick={() => removeKeyword(kw)} className="ml-1.5 opacity-50 hover:opacity-100 transition-opacity">×</button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#666] mb-4">No keywords yet. Try adding topics like "stablecoin" or "CFPB".</p>
+              )}
+              <input
+                type="text"
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addKeyword(keywordInput);
+                  }
+                }}
+                placeholder="Add keyword..."
+                className="w-full px-4 py-2.5 rounded-lg text-sm border border-[#e0e0e0] bg-white/80 focus:outline-none focus:border-[#0039A6] transition-colors"
+              />
             </div>
             <div className="mt-6 rounded-xl p-6" style={{ background: "rgba(255,255,255,0.4)", border: "1px dashed rgba(0,0,0,0.1)" }}>
               <p className="text-sm font-semibold text-[#444] mb-1">Multi-Client Keywords</p>
@@ -1236,7 +1339,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
             </div>
             {hearings.length > 0 ? (
-              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} />
+              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
             ) : (
               <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(255,255,255,0.35)", border: "1px dashed rgba(0,57,166,0.12)" }}>
                 <p className="text-sm font-medium text-[#666]">No hearings match "{searchQuery}"</p>
@@ -1248,28 +1351,28 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {/* This Week's Hearings — primary focus, top of page (starts expanded) */}
         {thisWeek.length > 0 && (
           <Accordion label="This Week's Hearings" count={thisWeek.length} color="#4A90C2" defaultOpen>
-            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
 
         {/* Upcoming — scheduled hearings beyond this week */}
         {upcoming.length > 0 && (
           <Accordion label="Upcoming" count={upcoming.length} color="#0039A6">
-            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
 
         {/* Recent — completed memos from the past ~30 days */}
         {recent.length > 0 && (
           <Accordion label="Recent" count={recent.length} color="#5a8a5d">
-            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} />
+            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
 
         {/* Older — hearings older than 30 days */}
         {older.length > 0 && (
           <Accordion label="Older" count={older.length} color="#555">
-            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} />
+            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
 
