@@ -1158,7 +1158,8 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {/* ─── Saved Page ─── */}
         {page === "saved" && (() => {
           const saved = allHearings.filter((h) => savedIds.has(h.event_id));
-          const savedUpcoming = saved.filter((h) => [HearingStatus.DETECTED, HearingStatus.RESOLVED, HearingStatus.READY, HearingStatus.PREPARING].includes(h.status));
+          const upcomingStatuses: HearingStatus[] = [HearingStatus.DETECTED, HearingStatus.RESOLVED, HearingStatus.READY, HearingStatus.PREPARING];
+          const savedUpcoming = saved.filter((h) => upcomingStatuses.includes(h.status));
           const savedProcessing = saved.filter((h) => h.status === HearingStatus.PROCESSING);
           const savedComplete = saved.filter((h) => h.status === HearingStatus.COMPLETE);
 
