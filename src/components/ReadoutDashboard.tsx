@@ -998,7 +998,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const [transcriptHearingId, setTranscriptHearingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const { data: committees } = useCommittees();
-  const { data } = useHearings({ committee_id: committeeFilter ?? undefined, limit: 250 });
+  const { data, isLoading } = useHearings({ committee_id: committeeFilter ?? undefined, limit: 250 });
 
   const countMap = new Map<string, number>();
   // Build counts from raw data
@@ -1227,7 +1227,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           </Accordion>
         )}
 
-        {hearings.length === 0 && (
+        {hearings.length === 0 && !isLoading && (
           <div className="flex items-center justify-center h-64 text-[#444]">No hearings found{committeeFilter ? " for this committee" : ""}.</div>
         )}
         </>)}
