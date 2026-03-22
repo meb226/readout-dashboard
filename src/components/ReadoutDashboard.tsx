@@ -1003,7 +1003,7 @@ interface Props {
   selectedEventId: string | null;
 }
 
-type Page = "dashboard" | "saved" | "matches" | "configure";
+type Page = "dashboard" | "matches" | "saved";
 
 export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEventId: _selectedEventId }: Props) {
   const [page, setPage] = useState<Page>("dashboard");
@@ -1173,7 +1173,6 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                 { id: "dashboard" as Page, label: "Dashboard" },
                 { id: "saved" as Page, label: "Saved" },
                 { id: "matches" as Page, label: "Matches" },
-                { id: "configure" as Page, label: "Configure" },
               ]).map((p) => (
                 <button key={p.id} onClick={() => setPage(p.id)}
                   className="px-3 py-1 text-sm font-semibold rounded-lg transition-all duration-200"
@@ -1187,9 +1186,6 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                   )}
                   {p.id === "matches" && matchedEventIds.length > 0 && (
                     <span className="ml-1 text-[10px] opacity-60">({matchedEventIds.length})</span>
-                  )}
-                  {p.id === "configure" && keywords.length > 0 && (
-                    <span className="ml-1 text-[10px] opacity-60">({keywords.length})</span>
                   )}
                 </button>
               ))}
@@ -1240,78 +1236,54 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {page === "matches" && (
           (() => {
             const matched = allHearings.filter((h) => matchKeywords(h.title).length > 0);
-            return matched.length > 0 ? (
+            return (
               <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-1.5 h-5 rounded-full" style={{ background: "#0039A6" }} />
-                  <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#0039A6" }}>Keyword Matches</h2>
-                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#0039A6", background: "rgba(0,57,166,0.1)" }}>{matched.length}</span>
-                  <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
-                </div>
-                <CardCarousel items={matched} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <svg className="w-16 h-16 text-[#ddd] mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <p className="text-lg font-bold text-[#555] mb-2">No keyword matches</p>
-                <p className="text-sm text-[#444] max-w-sm">
-                  {keywords.length === 0
-                    ? "Add keywords on the Configure page to see matching hearings here."
-                    : "None of the current hearings match your keywords. Matches will appear as new hearings are detected."}
-                </p>
-                {keywords.length === 0 && (
-                  <button onClick={() => setPage("configure")} className="mt-4 px-4 py-2 text-sm font-semibold rounded-lg" style={{ background: "rgba(0,57,166,0.08)", color: "#0039A6" }}>
-                    Configure Keywords
-                  </button>
-                )}
-              </div>
-            );
-          })()
-        )}
-
-        {/* ─── Configure Page (ML-311) ─── */}
-        {page === "configure" && (
-          <div className="max-w-lg">
-            <h2 className="text-xl font-bold text-[#1a1a1a] mb-2">Topic Alerts</h2>
-            <p className="text-sm text-[#444] mb-6">Add keywords to automatically flag hearings that match your interests.</p>
-            <div className="rounded-xl p-6" style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)" }}>
-              <p className="text-[11px] font-bold text-[#444] uppercase tracking-wider mb-3">Keywords</p>
-              {keywords.length > 0 ? (
-                <div className="flex flex-wrap gap-2 mb-4">
+                {/* Keyword input bar */}
+                <div className="flex items-center gap-2 flex-wrap mb-6">
                   {keywords.map((kw) => (
                     <span key={kw} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "rgba(0,57,166,0.08)", color: "#0039A6" }}>
                       {kw}
                       <button onClick={() => removeKeyword(kw)} className="ml-1.5 opacity-50 hover:opacity-100 transition-opacity">×</button>
                     </span>
                   ))}
+                  <input
+                    type="text"
+                    value={keywordInput}
+                    onChange={(e) => setKeywordInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addKeyword(keywordInput);
+                      }
+                    }}
+                    placeholder={keywords.length === 0 ? "Add keywords like 'stablecoin' or 'CFPB'..." : "Add keyword..."}
+                    className="px-3 py-1.5 rounded-lg text-sm border border-[#e0e0e0] bg-white/80 focus:outline-none focus:border-[#0039A6] transition-colors flex-1 min-w-[180px]"
+                  />
                 </div>
-              ) : (
-                <p className="text-xs text-[#666] mb-4">No keywords yet. Try adding topics like "stablecoin" or "CFPB".</p>
-              )}
-              <input
-                type="text"
-                value={keywordInput}
-                onChange={(e) => setKeywordInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault();
-                    addKeyword(keywordInput);
-                  }
-                }}
-                placeholder="Add keyword..."
-                className="w-full px-4 py-2.5 rounded-lg text-sm border border-[#e0e0e0] bg-white/80 focus:outline-none focus:border-[#0039A6] transition-colors"
-              />
-            </div>
-            <div className="mt-6 rounded-xl p-6" style={{ background: "rgba(255,255,255,0.4)", border: "1px dashed rgba(0,0,0,0.1)" }}>
-              <p className="text-sm font-semibold text-[#444] mb-1">Multi-Client Keywords</p>
-              <p className="text-xs text-[#444] mb-3">Set different keyword lists for each of your clients.</p>
-              <button className="px-4 py-2 text-xs font-bold rounded-lg text-white" style={{ background: "linear-gradient(135deg, #0039A6, #4A90C2)" }}>
-                Upgrade to Pro
-              </button>
-            </div>
-          </div>
+
+                {/* Results */}
+                {matched.length > 0 ? (
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-1.5 h-5 rounded-full" style={{ background: "#0039A6" }} />
+                      <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: "#0039A6" }}>Keyword Matches</h2>
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ color: "#0039A6", background: "rgba(0,57,166,0.1)" }}>{matched.length}</span>
+                      <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
+                    </div>
+                    <CardCarousel items={matched} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-48 text-center">
+                    <p className="text-sm text-[#666]">
+                      {keywords.length === 0
+                        ? "Add keywords above to find matching hearings."
+                        : "No hearings match your keywords yet."}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()
         )}
 
         {/* ─── Loading Skeleton ─── */}
