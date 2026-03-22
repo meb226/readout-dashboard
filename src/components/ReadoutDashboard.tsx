@@ -58,6 +58,10 @@ const CID: Record<string, { code: string; accent: string; ch: string }> = {
   senate_budget:         { code: "BDG", accent: "#0891B2", ch: "S" },
   senate_judiciary:      { code: "JUD", accent: "#7C2D12", ch: "S" },
   joint_economic:        { code: "JEC", accent: "#475569", ch: "J" },
+  house_appropriations:  { code: "APR", accent: "#B45309", ch: "H" },
+  senate_appropriations: { code: "APR", accent: "#D97706", ch: "S" },
+  house_oversight:       { code: "OVR", accent: "#059669", ch: "H" },
+  senate_commerce:       { code: "SCI", accent: "#2563EB", ch: "S" },
 };
 function cid(id: string) { return CID[id] ?? { code: "COM", accent: "#666", ch: "?" }; }
 
