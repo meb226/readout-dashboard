@@ -104,6 +104,21 @@ export interface DashboardStats {
   by_committee: CommitteeCount[];
 }
 
+export interface TranscriptUtterance {
+  speaker: number;
+  speaker_name: string;
+  text: string;
+  start: number;
+  end: number;
+  confidence: number;
+}
+
+export interface TranscriptData {
+  duration_seconds: number;
+  num_speakers: number;
+  utterances: TranscriptUtterance[];
+}
+
 export interface CommitteeInfo {
   committee_id: string;
   name: string;

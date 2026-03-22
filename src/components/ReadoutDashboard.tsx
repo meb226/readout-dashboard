@@ -17,6 +17,7 @@ import { ProcessButton } from "./ProcessButton";
 import { artifactUrl, fetchMemo } from "../api/client";
 import { downloadMemoAsDocx } from "../utils/memoToDocx";
 import { MemoViewer } from "./MemoViewer";
+import { TranscriptViewer } from "./TranscriptViewer";
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -113,8 +114,8 @@ const GLOBAL_STYLES = `
 
 // ─── Flip Card ────────────────────────────────────────────────────
 
-function Card({ hearing, index, flippedId, onFlip, onOpenMemo, showFlag = false }: {
-  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; showFlag?: boolean;
+function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript, showFlag = false }: {
+  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; onOpenTranscript: (id: string) => void; showFlag?: boolean;
 }) {
   const c = cid(hearing.committee_id);
   const isComplete = hearing.status === HearingStatus.COMPLETE;
@@ -365,6 +366,15 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, showFlag = false 
                   style={{ background: `linear-gradient(135deg, ${c.accent}, ${c.accent}bb)`, boxShadow: `0 4px 14px ${c.accent}20` }}
                 >
                   Read Full Memo
+                </button>
+              )}
+              {isComplete && (
+                <button
+                  onClick={() => { onFlip(null); onOpenTranscript(hearing.event_id); }}
+                  className="px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5"
+                  style={{ background: "white", color: "#333", border: "2px solid #e8e8e8" }}
+                >
+                  Transcript
                 </button>
               )}
               {hearing.congress_gov_url && (
@@ -681,11 +691,12 @@ function DateFilter({ month, year, onChangeMonth, onChangeYear }: {
 // ─── Card Carousel with dots ──────────────────────────────────────
 
 // CardCarousel — grid + pagination at the bottom
-function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage, showFlag }: {
+function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, perPage, showFlag }: {
   items: HearingListItem[];
   flippedId: string | null;
   onFlip: (id: string | null) => void;
   onOpenMemo: (id: string) => void;
+  onOpenTranscript: (id: string) => void;
   perPage: number;
   showFlag?: boolean;
 }) {
@@ -697,7 +708,7 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, perPage, showFlag 
     <div className="mb-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {visible.map((h, i) => (
-          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} showFlag={showFlag} />
+          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} onOpenTranscript={onOpenTranscript} showFlag={showFlag} />
         ))}
       </div>
 
@@ -895,6 +906,84 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
   );
 }
 
+// ─── Transcript Split View (card left 1/4, transcript right 3/4) ──
+
+function TranscriptSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose: () => void }) {
+  const c = cid(hearing.committee_id);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <div className="absolute inset-0" style={{ background: "rgba(10,10,15,0.5)", backdropFilter: "blur(12px)" }} onClick={onClose} />
+
+      {/* Split layout */}
+      <div className="relative z-10 flex w-full h-full p-6 gap-5 expand-enter">
+        {/* LEFT — hearing info (~1/4 width) */}
+        <div className="w-[320px] flex-shrink-0 flex flex-col rounded-2xl overflow-hidden"
+          style={{ background: "rgba(255,255,255,0.96)", backdropFilter: "blur(40px)", border: "1px solid rgba(255,255,255,0.6)", boxShadow: `0 24px 80px rgba(0,0,0,0.12), 0 0 0 1px ${c.accent}08` }}>
+          {/* Accent top bar */}
+          <div className="h-[3px]" style={{ background: `linear-gradient(90deg, ${c.accent}, ${c.accent}66, transparent)` }} />
+
+          <div className="p-6 flex flex-col flex-1">
+            {/* Committee badge */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider"
+                style={{ background: `${c.accent}12`, color: c.accent }}>
+                {c.ch}.{c.code}
+              </span>
+              <span className="text-sm text-[#444]">{hearing.committee_name}</span>
+            </div>
+
+            <p className="text-sm text-[#555] mb-2">{formatDate(hearing.hearing_date)}</p>
+            <h2 className="text-lg font-bold text-[#111] leading-snug mb-4" style={{ letterSpacing: "-0.02em" }}>
+              {hearing.title}
+            </h2>
+
+            <StatusBadge status={hearing.status} />
+
+            {hearing.congress_gov_url && (
+              <a href={hearing.congress_gov_url} target="_blank" rel="noopener"
+                className="mt-auto inline-flex items-center gap-1 text-xs font-semibold transition-colors pt-4" style={{ color: c.accent }}>
+                Congress.gov
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M17 7H7M17 7v10" />
+                </svg>
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT — transcript reader (~3/4 width) */}
+        <div className="flex-1 flex flex-col rounded-2xl overflow-hidden"
+          style={{ background: "rgba(255,255,255,0.98)", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 24px 80px rgba(0,0,0,0.08)" }}>
+          {/* Header bar */}
+          <div className="px-8 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-[#1a1a1a]" style={{ letterSpacing: "-0.02em" }}>Transcript</h2>
+              <span className="text-xs text-[#666]">{formatDate(hearing.hearing_date)}</span>
+            </div>
+            <button onClick={onClose}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#666] hover:text-[#666] hover:bg-black/5 transition-all text-lg">
+              &times;
+            </button>
+          </div>
+
+          {/* Transcript content — scrollable */}
+          <div className="flex-1 overflow-y-auto px-10 py-8">
+            <TranscriptViewer eventId={hearing.event_id} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────
 
 interface Props {
@@ -911,6 +1000,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const [yearFilter, setYearFilter] = useState<string | null>(null);
   const [flippedId, setFlippedId] = useState<string | null>(null);
   const [memoHearingId, setMemoHearingId] = useState<string | null>(null);
+  const [transcriptHearingId, setTranscriptHearingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const { data: committees } = useCommittees();
   const { data } = useHearings({ committee_id: committeeFilter ?? undefined, limit: 250 });
@@ -1105,7 +1195,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
             </div>
             {hearings.length > 0 ? (
-              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} />
             ) : (
               <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(255,255,255,0.35)", border: "1px dashed rgba(0,57,166,0.12)" }}>
                 <p className="text-sm font-medium text-[#666]">No hearings match "{searchQuery}"</p>
@@ -1117,28 +1207,28 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {/* This Week's Hearings — primary focus, top of page (starts expanded) */}
         {thisWeek.length > 0 && (
           <Accordion label="This Week's Hearings" count={thisWeek.length} color="#4A90C2" defaultOpen>
-            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
+            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag />
           </Accordion>
         )}
 
         {/* Upcoming — scheduled hearings beyond this week */}
         {upcoming.length > 0 && (
           <Accordion label="Upcoming" count={upcoming.length} color="#0039A6">
-            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} showFlag />
+            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag />
           </Accordion>
         )}
 
         {/* Recent — completed memos from the past ~30 days */}
         {recent.length > 0 && (
           <Accordion label="Recent" count={recent.length} color="#5a8a5d">
-            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} />
           </Accordion>
         )}
 
         {/* Older — hearings older than 30 days */}
         {older.length > 0 && (
           <Accordion label="Older" count={older.length} color="#555">
-            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} perPage={8} />
+            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} />
           </Accordion>
         )}
 
@@ -1151,6 +1241,12 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {memoHearingId && (() => {
           const h = hearings.find((x) => x.event_id === memoHearingId) ?? allHearings.find((x) => x.event_id === memoHearingId);
           return h ? <MemoSplitView hearing={h} onClose={() => setMemoHearingId(null)} /> : null;
+        })()}
+
+        {/* Transcript split view — full screen overlay */}
+        {transcriptHearingId && (() => {
+          const h = hearings.find((x) => x.event_id === transcriptHearingId) ?? allHearings.find((x) => x.event_id === transcriptHearingId);
+          return h ? <TranscriptSplitView hearing={h} onClose={() => setTranscriptHearingId(null)} /> : null;
         })()}
       </div>
     </div>

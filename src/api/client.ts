@@ -11,6 +11,7 @@ import type {
   ProcessingStatus,
   DashboardStats,
   CommitteeInfo,
+  TranscriptData,
 } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -75,6 +76,17 @@ export async function fetchProcessingStatus(eventId: string): Promise<Processing
 export async function fetchMemo(eventId: string): Promise<string> {
   const data = await apiFetch<{ content: string }>(`/api/hearings/${eventId}/memo`);
   return data.content;
+}
+
+// --- Transcript ---
+
+export async function fetchTranscript(eventId: string): Promise<TranscriptData> {
+  const url = artifactUrl(eventId, "transcript_attributed.json");
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`API ${res.status}: ${await res.text()}`);
+  }
+  return res.json();
 }
 
 // --- Artifacts ---
