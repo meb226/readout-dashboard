@@ -32,6 +32,7 @@ export interface HearingListItem {
   hearing_id: string | null;
   has_audio_brief: boolean;
   has_video: boolean;
+  has_transcript: boolean;
   detected_at: string;
   congress_gov_url: string;
 }
@@ -69,6 +70,7 @@ export interface HearingDetail {
   hearing_id: string | null;
   has_audio_brief: boolean;
   has_video: boolean;
+  has_transcript: boolean;
   stages: StageDetail[];
   briefs: Record<string, unknown>;
   retry_reason: string | null;

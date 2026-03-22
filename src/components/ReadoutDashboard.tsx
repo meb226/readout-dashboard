@@ -368,7 +368,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
                   Read Full Memo
                 </button>
               )}
-              {isComplete && (
+              {isComplete && hearing.has_transcript && (
                 <button
                   onClick={() => { onFlip(null); onOpenTranscript(hearing.event_id); }}
                   className="px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5"
