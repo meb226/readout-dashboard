@@ -324,11 +324,6 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
               </div>
             )}
 
-            {/* Process button if actionable */}
-            <div onClick={(e) => e.stopPropagation()}>
-              {isActionable && <div className="mb-4"><ProcessButton eventId={hearing.event_id} status={hearing.status} /></div>}
-            </div>
-
             {/* Audio + Video — only render when backend confirms artifact exists */}
             {isComplete && hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video) && (
               <div className={`grid ${(hearing.has_audio_brief && !audioError) && (hearing.has_video && !videoError) ? "grid-cols-2" : "grid-cols-1"} gap-3 flex-1 min-h-0`} onClick={(e) => e.stopPropagation()}>
