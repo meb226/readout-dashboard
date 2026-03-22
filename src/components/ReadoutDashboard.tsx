@@ -6,7 +6,7 @@
  * Capitol photo background at low opacity.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useHearings } from "../hooks/useHearings";
 import { useCommittees } from "../hooks/useCommittees";
 import { useHearingDetail } from "../hooks/useHearingDetail";
@@ -114,8 +114,8 @@ const GLOBAL_STYLES = `
 
 // ─── Flip Card ────────────────────────────────────────────────────
 
-function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript, showFlag = false }: {
-  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; onOpenTranscript: (id: string) => void; showFlag?: boolean;
+function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript, showFlag = false, isFlagged = false, onToggleFlag }: {
+  hearing: HearingListItem; index: number; flippedId: string | null; onFlip: (id: string | null) => void; onOpenMemo: (id: string) => void; onOpenTranscript: (id: string) => void; showFlag?: boolean; isFlagged?: boolean; onToggleFlag?: (eventId: string) => void;
 }) {
   const c = cid(hearing.committee_id);
   const isComplete = hearing.status === HearingStatus.COMPLETE;
@@ -124,7 +124,6 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
   const isProcessing = hearing.status === HearingStatus.PROCESSING;
   const isActionable = isReady || isPreparing || isProcessing;
   const isFlipped = flippedId === hearing.event_id;
-  const [flagged, setFlagged] = useState(false);
   const [audioError, setAudioError] = useState(false);
   const [videoError, setVideoError] = useState(false);
 
@@ -180,10 +179,10 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
                   {hearing.committee_name}
                 </span>
                 {showFlag && (
-                  <button onClick={(e) => { e.stopPropagation(); setFlagged(!flagged); }}
+                  <button onClick={(e) => { e.stopPropagation(); onToggleFlag?.(hearing.event_id); }}
                     className="ml-auto flex-shrink-0 transition-all duration-200 hover:scale-110"
-                    title={flagged ? "Remove flag" : "Flag — auto-process when available"}>
-                    {flagged ? (
+                    title={isFlagged ? "Remove flag" : "Flag — auto-process when available"}>
+                    {isFlagged ? (
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill={c.accent} stroke={c.accent} strokeWidth="1.5">
                         <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                       </svg>
@@ -686,7 +685,7 @@ function DateFilter({ month, year, onChangeMonth, onChangeYear }: {
 // ─── Card Carousel with dots ──────────────────────────────────────
 
 // CardCarousel — grid + pagination at the bottom
-function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, perPage, showFlag }: {
+function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, perPage, showFlag, savedIds, onToggleFlag }: {
   items: HearingListItem[];
   flippedId: string | null;
   onFlip: (id: string | null) => void;
@@ -694,6 +693,8 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, 
   onOpenTranscript: (id: string) => void;
   perPage: number;
   showFlag?: boolean;
+  savedIds?: Set<string>;
+  onToggleFlag?: (eventId: string) => void;
 }) {
   const [page, setPage] = useState(0);
   const totalPages = Math.ceil(items.length / perPage);
@@ -703,7 +704,7 @@ function CardCarousel({ items, flippedId, onFlip, onOpenMemo, onOpenTranscript, 
     <div className="mb-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {visible.map((h, i) => (
-          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} onOpenTranscript={onOpenTranscript} showFlag={showFlag} />
+          <Card key={h.event_id} hearing={h} index={i} flippedId={flippedId} onFlip={onFlip} onOpenMemo={onOpenMemo} onOpenTranscript={onOpenTranscript} showFlag={showFlag} isFlagged={savedIds?.has(h.event_id)} onToggleFlag={onToggleFlag} />
         ))}
       </div>
 
@@ -997,6 +998,14 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const [memoHearingId, setMemoHearingId] = useState<string | null>(null);
   const [transcriptHearingId, setTranscriptHearingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const toggleFlag = useCallback((eventId: string) => {
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId); else next.add(eventId);
+      return next;
+    });
+  }, []);
   const { data: committees } = useCommittees();
   const { data, isLoading } = useHearings({ committee_id: committeeFilter ?? undefined, limit: 250 });
 
@@ -1117,6 +1126,9 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                     color: page === p.id ? "#0039A6" : "#444",
                   }}>
                   {p.label}
+                  {p.id === "saved" && savedIds.size > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#0039A6] text-white leading-none">{savedIds.size}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -1143,16 +1155,41 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           )}
         </div>
 
-        {/* ─── Saved Page Stub ─── */}
-        {page === "saved" && (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <svg className="w-16 h-16 text-[#ddd] mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-            <p className="text-lg font-bold text-[#555] mb-2">No saved hearings yet</p>
-            <p className="text-sm text-[#444] max-w-sm">Flag upcoming hearings from the dashboard to save them here. Flagged hearings auto-process when video becomes available.</p>
-          </div>
-        )}
+        {/* ─── Saved Page ─── */}
+        {page === "saved" && (() => {
+          const saved = allHearings.filter((h) => savedIds.has(h.event_id));
+          const savedUpcoming = saved.filter((h) => [HearingStatus.DETECTED, HearingStatus.RESOLVED, HearingStatus.READY, HearingStatus.PREPARING].includes(h.status));
+          const savedProcessing = saved.filter((h) => h.status === HearingStatus.PROCESSING);
+          const savedComplete = saved.filter((h) => h.status === HearingStatus.COMPLETE);
+
+          if (saved.length === 0) return (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <svg className="w-16 h-16 text-[#ddd] mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              <p className="text-lg font-bold text-[#555] mb-2">No saved hearings yet</p>
+              <p className="text-sm text-[#444] max-w-sm">Flag upcoming hearings from the dashboard to save them here. Flagged hearings auto-process when video becomes available.</p>
+            </div>
+          );
+
+          return (<>
+            {savedUpcoming.length > 0 && (
+              <Accordion label="Upcoming" count={savedUpcoming.length} color="#0039A6" defaultOpen>
+                <CardCarousel items={savedUpcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+              </Accordion>
+            )}
+            {savedProcessing.length > 0 && (
+              <Accordion label="Processing" count={savedProcessing.length} color="#7C3AED" defaultOpen>
+                <CardCarousel items={savedProcessing} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+              </Accordion>
+            )}
+            {savedComplete.length > 0 && (
+              <Accordion label="Complete" count={savedComplete.length} color="#5a8a5d" defaultOpen>
+                <CardCarousel items={savedComplete} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
+              </Accordion>
+            )}
+          </>);
+        })()}
 
         {/* ─── Configure Page Stub ─── */}
         {page === "configure" && (
@@ -1190,7 +1227,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, rgba(0,57,166,0.25), transparent)" }} />
             </div>
             {hearings.length > 0 ? (
-              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} />
+              <CardCarousel items={hearings} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} />
             ) : (
               <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(255,255,255,0.35)", border: "1px dashed rgba(0,57,166,0.12)" }}>
                 <p className="text-sm font-medium text-[#666]">No hearings match "{searchQuery}"</p>
@@ -1202,28 +1239,28 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         {/* This Week's Hearings — primary focus, top of page (starts expanded) */}
         {thisWeek.length > 0 && (
           <Accordion label="This Week's Hearings" count={thisWeek.length} color="#4A90C2" defaultOpen>
-            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag />
+            <CardCarousel items={thisWeek} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
           </Accordion>
         )}
 
         {/* Upcoming — scheduled hearings beyond this week */}
         {upcoming.length > 0 && (
           <Accordion label="Upcoming" count={upcoming.length} color="#0039A6">
-            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag />
+            <CardCarousel items={upcoming} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} showFlag savedIds={savedIds} onToggleFlag={toggleFlag} />
           </Accordion>
         )}
 
         {/* Recent — completed memos from the past ~30 days */}
         {recent.length > 0 && (
           <Accordion label="Recent" count={recent.length} color="#5a8a5d">
-            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} />
+            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} />
           </Accordion>
         )}
 
         {/* Older — hearings older than 30 days */}
         {older.length > 0 && (
           <Accordion label="Older" count={older.length} color="#555">
-            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} />
+            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} />
           </Accordion>
         )}
 
