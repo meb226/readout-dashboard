@@ -1007,7 +1007,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     });
   }, []);
   const { data: committees } = useCommittees();
-  const { data, isLoading } = useHearings({ committee_id: committeeFilter ?? undefined, limit: 250 });
+  const { data, isLoading } = useHearings({ limit: 250 });
 
   const countMap = new Map<string, number>();
   // Build counts from raw data
@@ -1016,8 +1016,8 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     countMap.set(h.committee_id, (countMap.get(h.committee_id) ?? 0) + 1);
   }
 
-  // Apply date filters
-  let hearings = allHearings;
+  // Apply committee filter client-side (so Saved page can access all hearings)
+  let hearings = committeeFilter ? allHearings.filter((h) => h.committee_id === committeeFilter) : allHearings;
   if (yearFilter) {
     hearings = hearings.filter((h) => h.hearing_date.startsWith(yearFilter));
   }
