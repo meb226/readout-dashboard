@@ -104,3 +104,9 @@ export async function fetchStats(): Promise<DashboardStats> {
 export async function fetchCommittees(): Promise<CommitteeInfo[]> {
   return apiFetch("/api/committees");
 }
+
+// --- Flag toggle (ML-308) ---
+
+export async function toggleHearingFlag(eventId: string): Promise<{ event_id: string; auto_process: boolean }> {
+  return apiFetch(`/api/hearings/${eventId}/flag`, { method: "POST" });
+}

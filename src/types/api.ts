@@ -35,6 +35,7 @@ export interface HearingListItem {
   has_transcript: boolean;
   detected_at: string;
   congress_gov_url: string;
+  auto_process: boolean;
 }
 
 export interface HearingListResponse {

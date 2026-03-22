@@ -6,15 +6,16 @@
  * Capitol photo background at low opacity.
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useHearings } from "../hooks/useHearings";
 import { useCommittees } from "../hooks/useCommittees";
 import { useHearingDetail } from "../hooks/useHearingDetail";
 import { HearingStatus } from "../types/api";
-import type { HearingListItem, CommitteeInfo } from "../types/api";
+import type { HearingListItem, HearingListResponse, CommitteeInfo } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
 import { ProcessButton } from "./ProcessButton";
-import { artifactUrl, fetchMemo } from "../api/client";
+import { artifactUrl, fetchMemo, toggleHearingFlag } from "../api/client";
 import { downloadMemoAsDocx } from "../utils/memoToDocx";
 import { MemoViewer } from "./MemoViewer";
 import { TranscriptViewer } from "./TranscriptViewer";
@@ -998,20 +999,30 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const [memoHearingId, setMemoHearingId] = useState<string | null>(null);
   const [transcriptHearingId, setTranscriptHearingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const toggleFlag = useCallback((eventId: string) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(eventId)) next.delete(eventId); else next.add(eventId);
-      return next;
-    });
-  }, []);
+  const queryClient = useQueryClient();
   const { data: committees } = useCommittees();
   const { data, isLoading } = useHearings({ limit: 250 });
 
   const countMap = new Map<string, number>();
   // Build counts from raw data
   const allHearings = data?.hearings ?? [];
+
+  // ML-308: Derive savedIds from server data + optimistic toggle via API
+  const savedIds = useMemo(() => new Set(allHearings.filter((h) => h.auto_process).map((h) => h.event_id)), [allHearings]);
+  const toggleFlag = useCallback(async (eventId: string) => {
+    // Optimistic update
+    queryClient.setQueryData(["hearings", { limit: 250 }], (old: HearingListResponse | undefined) => {
+      if (!old) return old;
+      return { ...old, hearings: old.hearings.map((h) => h.event_id === eventId ? { ...h, auto_process: !h.auto_process } : h) };
+    });
+    try {
+      await toggleHearingFlag(eventId);
+      queryClient.invalidateQueries({ queryKey: ["hearings"] });
+    } catch {
+      // Rollback on error
+      queryClient.invalidateQueries({ queryKey: ["hearings"] });
+    }
+  }, [queryClient]);
   for (const h of allHearings) {
     countMap.set(h.committee_id, (countMap.get(h.committee_id) ?? 0) + 1);
   }
