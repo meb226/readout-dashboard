@@ -10,16 +10,21 @@ interface ProcessButtonProps {
 }
 
 export function ProcessButton({ eventId, status }: ProcessButtonProps) {
-  const [isTriggering, setIsTriggering] = useState(false);
+  const [triggered, setTriggered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // Poll while preparing or processing
+  // Poll while preparing, processing, or just triggered
   const isActive = status === HearingStatus.PREPARING || status === HearingStatus.PROCESSING;
-  const { data: progress } = useProcessingStatus(eventId, isActive);
+  const { data: progress } = useProcessingStatus(eventId, isActive || triggered);
+
+  // Clear triggered flag once backend confirms status changed
+  if (triggered && isActive) {
+    setTriggered(false);
+  }
 
   async function handleProcess() {
-    setIsTriggering(true);
+    setTriggered(true);
     setError(null);
     try {
       await triggerProcessing(eventId);
@@ -28,14 +33,13 @@ export function ProcessButton({ eventId, status }: ProcessButtonProps) {
       queryClient.invalidateQueries({ queryKey: ["stats"] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to trigger processing");
-    } finally {
-      setIsTriggering(false);
+      setTriggered(false);
     }
   }
 
-  // Show progress bar when actively processing
-  if (isActive && progress) {
-    const pct = progress.progress_percent;
+  // Show progress bar when actively processing or just triggered
+  if ((isActive || triggered) && (progress || triggered)) {
+    const pct = progress?.progress_percent ?? 0;
     return (
       <div className="flex items-center gap-2 min-w-[140px]">
         <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
@@ -43,11 +47,13 @@ export function ProcessButton({ eventId, status }: ProcessButtonProps) {
             className="h-full rounded-full transition-all duration-500"
             style={{
               width: `${pct}%`,
-              backgroundColor: status === HearingStatus.PREPARING ? "#B8860B" : "#0039A6",
+              backgroundColor: triggered && !isActive ? "#B8860B" : "#0039A6",
             }}
           />
         </div>
-        <span className="text-xs text-text-muted font-heading w-8 text-right">{pct}%</span>
+        <span className="text-xs text-text-muted font-heading w-16 text-right">
+          {triggered && !isActive ? "Starting..." : `${pct}%`}
+        </span>
       </div>
     );
   }
@@ -58,10 +64,10 @@ export function ProcessButton({ eventId, status }: ProcessButtonProps) {
       <div>
         <button
           onClick={handleProcess}
-          disabled={isTriggering}
+          disabled={triggered}
           className="px-3 py-1.5 text-xs font-semibold text-white bg-navy rounded hover:bg-[#002d85] transition-colors disabled:opacity-50 font-heading"
         >
-          {isTriggering ? "Starting..." : "Process"}
+          Process
         </button>
         {error && <p className="text-xs text-red mt-1">{error}</p>}
       </div>
