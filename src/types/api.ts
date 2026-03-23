@@ -132,3 +132,47 @@ export interface CommitteeInfo {
   priority: string;
   member_count: number;
 }
+
+// ML-62: Transcript search types
+
+export interface TranscriptSearchHit {
+  event_id: string;
+  turn_index: number;
+  speaker_name: string;
+  party: string | null;
+  start_time: number;
+  end_time: number;
+  snippet: string;
+  rank: number;
+  hearing_title: string;
+  committee_id: string;
+  committee_name: string;
+  hearing_date: string;
+}
+
+export interface TranscriptSearchResponse {
+  hits: TranscriptSearchHit[];
+  total: number;
+  query: string;
+  offset: number;
+  limit: number;
+}
+
+export interface ContextTurn {
+  turn_index: number;
+  speaker_name: string;
+  party: string | null;
+  text: string;
+  start_time: number;
+  end_time: number;
+  is_match: boolean;
+}
+
+export interface ContextResponse {
+  event_id: string;
+  hearing_title: string;
+  committee_name: string;
+  hearing_date: string;
+  turns: ContextTurn[];
+  match_turn_index: number;
+}

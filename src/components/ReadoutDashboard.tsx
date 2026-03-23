@@ -20,6 +20,9 @@ import { artifactUrl, fetchMemo, toggleHearingFlag } from "../api/client";
 import { downloadMemoAsDocx } from "../utils/memoToDocx";
 import { MemoViewer } from "./MemoViewer";
 import { TranscriptViewer } from "./TranscriptViewer";
+import { TranscriptSearch } from "./TranscriptSearch";
+import { useTranscriptSearch } from "../hooks/useTranscriptSearch";
+import type { TranscriptSearchHit } from "../types/api";
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -1003,7 +1006,7 @@ interface Props {
   selectedEventId: string | null;
 }
 
-type Page = "dashboard" | "matches" | "saved";
+type Page = "dashboard" | "matches" | "saved" | "search";
 
 export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEventId: _selectedEventId }: Props) {
   const [page, setPage] = useState<Page>("dashboard");
@@ -1018,6 +1021,10 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     try { return JSON.parse(localStorage.getItem("readout_keywords") ?? "[]"); } catch { return []; }
   });
   const [keywordInput, setKeywordInput] = useState("");
+  const [searchMode, setSearchMode] = useState<"hearings" | "transcripts">("hearings");
+  const [transcriptSearchQuery, setTranscriptSearchQuery] = useState("");
+  const [showTranscriptPreview, setShowTranscriptPreview] = useState(false);
+  const [previousPage, setPreviousPage] = useState<Page>("dashboard");
   const queryClient = useQueryClient();
   const { data: committees } = useCommittees();
   const { data, isLoading } = useHearings({ limit: 250 });
@@ -1057,8 +1064,8 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     hearings = hearings.filter((h) => h.hearing_date.slice(5, 7) === monthFilter);
   }
 
-  // ML-317: Search filter
-  if (searchQuery) {
+  // ML-317: Search filter (hearings mode only)
+  if (searchQuery && searchMode === "hearings") {
     const q = searchQuery.toLowerCase();
     hearings = hearings.filter((h) => h.title.toLowerCase().includes(q));
   }
@@ -1087,6 +1094,12 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     .filter((h) => matchKeywords(h.title).length > 0)
     .map((h) => h.event_id);
   const keywordCountsMap = useKeywordCounts(matchedEventIds, keywords);
+
+  // ML-62: Transcript search preview (top 5 results for inline dropdown)
+  const { data: transcriptPreview } = useTranscriptSearch({
+    q: transcriptSearchQuery,
+    limit: 5,
+  });
 
   // ── Time-based grouping ──
   const now = new Date();
@@ -1194,17 +1207,107 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
 
           {page === "dashboard" && (
             <div className="flex items-center gap-2">
+              {/* ML-62: Search mode toggle + input */}
               <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search hearing titles..."
-                  className="text-sm pr-8 pl-3 py-2 rounded-lg focus:outline-none focus:border-[#0039A6] transition-colors"
-                  style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)", boxShadow: "0 2px 10px rgba(0,0,0,0.04)", width: 220 }}
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#999] hover:text-[#444] text-sm font-bold leading-none" style={{ background: "none", border: "none", cursor: "pointer" }}>×</button>
+                <div className="flex rounded-lg overflow-hidden" style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
+                  {/* Mode toggle */}
+                  <select
+                    value={searchMode}
+                    onChange={(e) => {
+                      const mode = e.target.value as "hearings" | "transcripts";
+                      setSearchMode(mode);
+                      setSearchQuery("");
+                      setTranscriptSearchQuery("");
+                      setShowTranscriptPreview(false);
+                    }}
+                    className="text-[11px] font-semibold px-2 py-2 bg-transparent border-r border-white/30 focus:outline-none cursor-pointer"
+                    style={{ color: "#0039A6" }}
+                  >
+                    <option value="hearings">Hearings</option>
+                    <option value="transcripts">Transcripts</option>
+                  </select>
+
+                  {/* Search input */}
+                  <input
+                    type="text"
+                    value={searchMode === "hearings" ? searchQuery : transcriptSearchQuery}
+                    onChange={(e) => {
+                      if (searchMode === "hearings") {
+                        setSearchQuery(e.target.value);
+                      } else {
+                        setTranscriptSearchQuery(e.target.value);
+                        setShowTranscriptPreview(e.target.value.length >= 2);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (searchMode === "transcripts" && transcriptSearchQuery.length >= 2) {
+                        setShowTranscriptPreview(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay to allow click on preview items
+                      setTimeout(() => setShowTranscriptPreview(false), 200);
+                    }}
+                    placeholder={searchMode === "hearings" ? "Search titles..." : "Search transcripts..."}
+                    className="text-sm pr-8 pl-3 py-2 bg-transparent focus:outline-none transition-colors"
+                    style={{ width: 190 }}
+                  />
+                  {(searchQuery || transcriptSearchQuery) && (
+                    <button onClick={() => { setSearchQuery(""); setTranscriptSearchQuery(""); setShowTranscriptPreview(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#999] hover:text-[#444] text-sm font-bold leading-none" style={{ background: "none", border: "none", cursor: "pointer" }}>×</button>
+                  )}
+                </div>
+
+                {/* ML-62: Transcript search preview dropdown */}
+                {showTranscriptPreview && transcriptPreview && transcriptPreview.hits.length > 0 && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
+                    style={{
+                      background: "rgba(255,255,255,0.95)",
+                      backdropFilter: "blur(20px)",
+                      border: "1px solid rgba(0,0,0,0.08)",
+                      boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+                      minWidth: 360,
+                    }}
+                  >
+                    {transcriptPreview.hits.slice(0, 5).map((hit: TranscriptSearchHit, idx: number) => (
+                      <button
+                        key={`${hit.event_id}-${hit.turn_index}`}
+                        className="w-full text-left px-3 py-2.5 hover:bg-[#f5f5f5] transition-colors"
+                        style={{ borderBottom: idx < 4 ? "1px solid rgba(0,0,0,0.04)" : "none" }}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent blur
+                          setPreviousPage(page);
+                          setPage("search");
+                          setShowTranscriptPreview(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-bold text-[#0039A6]">{hit.speaker_name}</span>
+                          {hit.party && (
+                            <span className="text-[9px] font-bold px-1 rounded" style={{
+                              background: hit.party === "R" ? "#FEE2E2" : "#DBEAFE",
+                              color: hit.party === "R" ? "#991B1B" : "#1E3A8A",
+                            }}>{hit.party}</span>
+                          )}
+                          <span className="text-[10px] text-[#bbb]">{hit.committee_name}</span>
+                        </div>
+                        <p className="text-xs text-[#555] leading-relaxed line-clamp-2" dangerouslySetInnerHTML={{ __html: hit.snippet }} />
+                      </button>
+                    ))}
+                    {transcriptPreview.total > 5 && (
+                      <button
+                        className="w-full text-center py-2 text-xs font-semibold text-[#0039A6] hover:bg-[#f0f4ff] transition-colors"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setPreviousPage(page);
+                          setPage("search");
+                          setShowTranscriptPreview(false);
+                        }}
+                      >
+                        See all {transcriptPreview.total} results
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               {committees && <CommitteeDropdown committees={committees} selected={committeeFilter} onSelect={setCommitteeFilter} countMap={countMap} />}
@@ -1284,6 +1387,18 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               </div>
             );
           })()
+        )}
+
+        {/* ─── ML-62: Search Page ─── */}
+        {page === "search" && (
+          <TranscriptSearch
+            initialQuery={transcriptSearchQuery}
+            onBack={() => {
+              setPage(previousPage);
+              setTranscriptSearchQuery("");
+            }}
+            onOpenTranscript={(eventId) => setTranscriptHearingId(eventId)}
+          />
         )}
 
         {/* ─── Loading Skeleton ─── */}

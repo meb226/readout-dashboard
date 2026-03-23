@@ -12,6 +12,8 @@ import type {
   DashboardStats,
   CommitteeInfo,
   TranscriptData,
+  TranscriptSearchResponse,
+  ContextResponse,
 } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -119,4 +121,42 @@ export async function fetchCommittees(): Promise<CommitteeInfo[]> {
 
 export async function toggleHearingFlag(eventId: string): Promise<{ event_id: string; auto_process: boolean }> {
   return apiFetch(`/api/hearings/${eventId}/flag`, { method: "POST" });
+}
+
+// --- Transcript search (ML-62) ---
+
+export async function searchTranscripts(params: {
+  q: string;
+  speaker?: string;
+  committee_id?: string;
+  date_from?: string;
+  date_to?: string;
+  party?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<TranscriptSearchResponse> {
+  const qs = new URLSearchParams();
+  qs.set("q", params.q);
+  if (params.speaker) qs.set("speaker", params.speaker);
+  if (params.committee_id) qs.set("committee_id", params.committee_id);
+  if (params.date_from) qs.set("date_from", params.date_from);
+  if (params.date_to) qs.set("date_to", params.date_to);
+  if (params.party) qs.set("party", params.party);
+  if (params.offset !== undefined) qs.set("offset", String(params.offset));
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+
+  return apiFetch(`/api/search?${qs.toString()}`);
+}
+
+export async function fetchSearchContext(params: {
+  event_id: string;
+  turn_index: number;
+  radius?: number;
+}): Promise<ContextResponse> {
+  const qs = new URLSearchParams();
+  qs.set("event_id", params.event_id);
+  qs.set("turn_index", String(params.turn_index));
+  if (params.radius !== undefined) qs.set("radius", String(params.radius));
+
+  return apiFetch(`/api/search/context?${qs.toString()}`);
 }
