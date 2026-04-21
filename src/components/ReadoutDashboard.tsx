@@ -1131,16 +1131,19 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   });
   const upcomingIds = new Set(upcoming.map((h) => h.event_id));
 
-  // 3. Recent — completed memos from the past ~30 days (before this week)
+  // 3. Recent — hearings from the past ~30 days, regardless of pipeline status.
+  // ML-482: Removed the COMPLETE-only gate. Status is already shown on each
+  // card; using it as a grouping criterion produced confusing results where
+  // an older COMPLETE hearing appeared in "Recent" while a newer in-pipeline
+  // hearing was banished to "Older".
   const recent = hearings.filter((h) => {
     if (thisWeekIds.has(h.event_id) || upcomingIds.has(h.event_id)) return false;
-    if (h.status !== HearingStatus.COMPLETE) return false;
     const d = new Date(h.hearing_date);
     return d >= thirtyDaysAgo && d < weekStart;
   });
   const recentIds = new Set(recent.map((h) => h.event_id));
 
-  // 4. Older — everything else (>30 days old, or past but not yet complete)
+  // 4. Older — everything more than 30 days old.
   const older = hearings.filter((h) =>
     !thisWeekIds.has(h.event_id) && !upcomingIds.has(h.event_id) && !recentIds.has(h.event_id)
   );
@@ -1449,9 +1452,9 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           </Accordion>
         )}
 
-        {/* Recent — completed memos from the past ~30 days */}
+        {/* Recent — hearings from the past ~30 days (ML-482: chronological, not status-gated) */}
         {recent.length > 0 && (
-          <Accordion label="Recent" count={recent.length} color="#5a8a5d">
+          <Accordion label="Recent" count={recent.length} color="#5a8a5d" defaultOpen>
             <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
