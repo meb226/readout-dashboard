@@ -56,18 +56,47 @@ function HighlightText({ text, query, matchIndices, currentMatchIndex }: {
 
 /** Group consecutive utterances by the same speaker into blocks. */
 function groupBySpeaker(utterances: TranscriptUtterance[]) {
-  const groups: { speaker_name: string; start: number; utterances: TranscriptUtterance[] }[] = [];
+  const groups: {
+    speaker_name: string;
+    party?: string | null;
+    start: number;
+    utterances: TranscriptUtterance[];
+  }[] = [];
 
   for (const u of utterances) {
     const last = groups[groups.length - 1];
     if (last && last.speaker_name === u.speaker_name) {
       last.utterances.push(u);
     } else {
-      groups.push({ speaker_name: u.speaker_name, start: u.start, utterances: [u] });
+      groups.push({
+        speaker_name: u.speaker_name,
+        party: u.party ?? null,
+        start: u.start,
+        utterances: [u],
+      });
     }
   }
 
   return groups;
+}
+
+/** ML-227: Small R/D pill, color-matched to the search-result badges. */
+function PartyPill({ party }: { party?: string | null }) {
+  if (party !== "R" && party !== "D") return null;
+  const styles =
+    party === "R"
+      ? { background: "#FEE2E2", color: "#991B1B" }
+      : { background: "#DBEAFE", color: "#1E3A8A" };
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded text-[10px] font-bold tabular-nums w-4 h-4 leading-none"
+      style={styles}
+      aria-label={party === "R" ? "Republican" : "Democrat"}
+      title={party === "R" ? "Republican" : "Democrat"}
+    >
+      {party}
+    </span>
+  );
 }
 
 export { type TranscriptData };
@@ -261,6 +290,7 @@ export function TranscriptViewer({ eventId, hideDownload }: TranscriptViewerProp
                 <span className="font-heading text-sm font-semibold text-navy">
                   {group.speaker_name || `Speaker ${group.utterances[0].speaker}`}
                 </span>
+                <PartyPill party={group.party} />
                 <span className="text-xs text-text-faint">
                   {formatTimestamp(group.start)}
                 </span>

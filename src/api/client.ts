@@ -83,12 +83,10 @@ export async function fetchMemo(eventId: string): Promise<string> {
 // --- Transcript ---
 
 export async function fetchTranscript(eventId: string): Promise<TranscriptData> {
-  const url = artifactUrl(eventId, "transcript_attributed.json");
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`API ${res.status}: ${await res.text()}`);
-  }
-  return res.json();
+  // ML-227: Use the dedicated transcript endpoint which enriches each
+  // utterance with a `party` indicator (R / D / null) by cross-referencing
+  // the speaker against the committee roster.
+  return apiFetch(`/api/hearings/${eventId}/transcript`);
 }
 
 // --- Artifacts ---

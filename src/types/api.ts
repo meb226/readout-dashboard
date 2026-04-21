@@ -114,6 +114,8 @@ export interface TranscriptUtterance {
   start: number;
   end: number;
   confidence: number;
+  /** ML-227: "R" / "D" for committee members, null for witnesses or unrecognized speakers. */
+  party?: string | null;
 }
 
 export interface TranscriptData {
