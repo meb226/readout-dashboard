@@ -3,8 +3,10 @@ import { createRoot } from "react-dom/client";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App";
+import { AuthProvider } from "./auth/AuthProvider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,7 +25,11 @@ const persister = createSyncStoragePersister({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 }}>
-      <App />
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
     </PersistQueryClientProvider>
   </StrictMode>,
 );

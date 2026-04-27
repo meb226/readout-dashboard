@@ -2,7 +2,10 @@
  * Typed API client for the Readout FastAPI backend.
  *
  * ML-65: One function per endpoint. Base URL from VITE_API_URL env var.
- * The optional `token` parameter is unused now but ready for ML-224 (Clerk auth).
+ * ML-327/ML-224: Every request sends `credentials: 'include'` so the
+ * shared .meridianlogic.ai session cookie travels cross-subdomain.
+ * On a 401, we bounce the user to /login (which itself redirects to
+ * the backend's /auth/login → WorkOS AuthKit).
  */
 
 import type {
@@ -21,11 +24,24 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
     },
   });
+
+  // 401 → session expired or never existed. Bounce to /login.
+  // We avoid throwing here so React Query's error handlers don't all
+  // need to special-case auth — the page redirects before they run.
+  // The /login path itself is exempt: it has no API calls.
+  if (res.status === 401 && typeof window !== "undefined") {
+    if (!window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+    // Throw so callers know the promise didn't resolve normally.
+    throw new Error("Unauthenticated");
+  }
 
   if (!res.ok) {
     const body = await res.text();
