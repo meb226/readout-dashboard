@@ -1,11 +1,15 @@
 /**
  * Typed API client for the Readout FastAPI backend.
  *
- * ML-65: One function per endpoint. Base URL from VITE_API_URL env var.
+ * ML-65: One function per endpoint.
  * ML-327/ML-224: Every request sends `credentials: 'include'` so the
  * shared .meridianlogic.ai session cookie travels cross-subdomain.
  * On a 401, we bounce the user to /login (which itself redirects to
  * the backend's /auth/login → WorkOS AuthKit).
+ *
+ * Same-origin always. Vercel rewrites in vercel.json proxy /api/* to
+ * the Railway backend in production; vite.config.ts proxies it to
+ * localhost:8000 in dev.
  */
 
 import type {
@@ -19,7 +23,7 @@ import type {
   ContextResponse,
 } from "../types/api";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = "";
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

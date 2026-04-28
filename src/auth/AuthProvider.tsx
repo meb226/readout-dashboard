@@ -10,7 +10,14 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Same-origin always. In production the SPA is served from
+// readout.meridianlogic.ai and Vercel rewrites in vercel.json proxy
+// /api/* and /auth/* to the Railway backend, keeping cookies same-origin.
+// In dev, vite.config.ts proxies the same paths to localhost:8000.
+// Hardcoded "" (instead of reading VITE_API_URL) so a stale env var
+// pointing at the Railway hostname can't bake a cross-origin URL into
+// the bundle and break the cookie flow.
+const API_BASE = "";
 
 export interface AuthSession {
   authed: true;

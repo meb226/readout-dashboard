@@ -11,11 +11,12 @@
 
 import { useEffect } from "react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
+// Relative URL: navigates to /auth/login on the current origin.
+// Vercel rewrites in vercel.json proxy this to the Railway backend
+// in production; vite.config.ts proxies it to localhost:8000 in dev.
 export function Login() {
   useEffect(() => {
-    window.location.href = `${API_BASE}/auth/login`;
+    window.location.href = "/auth/login";
   }, []);
   return (
     <div style={{ padding: 48, fontFamily: "Inter, sans-serif", color: "#444" }}>
