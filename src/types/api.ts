@@ -178,3 +178,35 @@ export interface ContextResponse {
   turns: ContextTurn[];
   match_turn_index: number;
 }
+
+// ML-529 / ML-532: Subscription management
+
+export interface Subscription {
+  committee_id: string;
+  name: string;
+}
+
+export interface SubscriptionsResponse {
+  subscriptions: Subscription[];
+}
+
+export interface SubscribeResponse {
+  subscribed: true;
+  committee_id: string;
+  was_first_subscriber: boolean;
+  already_subscribed: boolean;
+  unarchived: number;
+  queued_backfill: number;
+  skipped_paused: number;
+  paused: boolean;
+  started_at: string;
+}
+
+export interface UnsubscribeResponse {
+  unsubscribed: boolean;
+  committee_id: string;
+  was_last_subscriber: boolean;
+  was_subscribed: boolean;
+  archived: number;
+  ended_at: string | null;
+}

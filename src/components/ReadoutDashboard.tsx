@@ -7,6 +7,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHearings } from "../hooks/useHearings";
 import { useCommittees } from "../hooks/useCommittees";
@@ -1205,6 +1206,15 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                   )}
                 </button>
               ))}
+              {/* ML-532: subscriber-facing committee picker */}
+              <Link
+                to="/settings/committees"
+                className="px-3 py-1 text-sm font-semibold rounded-lg transition-all duration-200"
+                style={{ color: "#444" }}
+                title="Manage committee subscriptions"
+              >
+                Committees
+              </Link>
             </div>
           </div>
 

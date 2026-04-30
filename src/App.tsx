@@ -14,6 +14,7 @@ import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
 import { Login } from "./pages/Login";
 import { NoAccess } from "./pages/NoAccess";
+import { CommitteeSettings } from "./pages/CommitteeSettings";
 
 function Dashboard() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -50,6 +51,14 @@ export default function App() {
           <RequireAdmin>
             <AdminPlaceholder />
           </RequireAdmin>
+        }
+      />
+      <Route
+        path="/settings/committees"
+        element={
+          <RequireAuth>
+            <CommitteeSettings />
+          </RequireAuth>
         }
       />
       <Route
