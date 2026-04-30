@@ -21,6 +21,9 @@ import type {
   TranscriptData,
   TranscriptSearchResponse,
   ContextResponse,
+  SubscriptionsResponse,
+  SubscribeResponse,
+  UnsubscribeResponse,
 } from "../types/api";
 
 const API_BASE = "";
@@ -177,4 +180,22 @@ export async function fetchSearchContext(params: {
   if (params.radius !== undefined) qs.set("radius", String(params.radius));
 
   return apiFetch(`/api/search/context?${qs.toString()}`);
+}
+
+// --- Subscriptions (ML-529 / ML-532) ---
+
+export async function fetchSubscriptions(): Promise<SubscriptionsResponse> {
+  return apiFetch("/api/subscriptions");
+}
+
+export async function subscribeToCommittee(
+  committeeId: string,
+): Promise<SubscribeResponse> {
+  return apiFetch(`/api/subscriptions/${committeeId}`, { method: "POST" });
+}
+
+export async function unsubscribeFromCommittee(
+  committeeId: string,
+): Promise<UnsubscribeResponse> {
+  return apiFetch(`/api/subscriptions/${committeeId}`, { method: "DELETE" });
 }
