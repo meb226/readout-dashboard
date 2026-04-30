@@ -40,30 +40,32 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 async function fetchSession(): Promise<AuthSession | null> {
-  // ML-534 telemetry: trace the auth-check round-trip end to end.
-  console.log("[ml534] fetchSession start", {
-    pathname: window.location.pathname,
-    search: window.location.search,
-    cookieAvailableToJs: document.cookie.length,
-  });
   const res = await fetch(`${API_BASE}/api/auth/check`, {
     credentials: "include",
   });
-  console.log("[ml534] fetchSession response", {
-    status: res.status,
-    ok: res.ok,
-    redirected: res.redirected,
-    url: res.url,
-  });
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`Auth check failed: ${res.status}`);
-  const body = await res.json();
-  console.log("[ml534] fetchSession body", body);
-  return body;
+  return res.json();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data, isLoading, isFetching, status, error } = useQuery({
+  // ML-534: We expose `isPending` (no answer yet) as `isLoading` rather
+  // than React Query's `isLoading` (which means "actively fetching").
+  //
+  // The bug: on the very first render after `/auth/callback` redirected
+  // us back to `/`, useQuery returned `status: 'pending'` but
+  // `isLoading: false` because the fetch is scheduled in a useEffect
+  // that fires AFTER the first render. RequireAuth, seeing
+  // isLoading=false and data=undefined (session=null), would
+  // immediately <Navigate to="/login" />, mounting Login.tsx which
+  // bounced the browser to /auth/login — even though the cookie was
+  // valid and the about-to-fire /api/auth/check would have returned
+  // 200. That kicked off the /auth/login → /auth/callback → /auth/login
+  // redirect loop.
+  //
+  // `isPending` stays true until the query has its first answer
+  // (success OR error), so RequireAuth correctly waits.
+  const { data, isPending } = useQuery({
     queryKey: ["auth-session"],
     queryFn: fetchSession,
     // Don't retry — a 401 is an answer, not a transient failure.
@@ -73,21 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const session = data ?? null;
-  // ML-534 telemetry: log every render so we can see when/why session
-  // is null at decision time in RequireAuth. Strip after diagnosis.
-  console.log("[ml534] AuthProvider render", {
-    pathname: window.location.pathname,
-    isLoading,
-    isFetching,
-    status,
-    error: error ? String(error) : null,
-    hasData: data !== undefined,
-    sessionIsNull: session === null,
-    sessionEmail: session?.email,
-  });
   const value: AuthContextValue = {
     session,
-    isLoading,
+    isLoading: isPending,
     isAdmin: session?.is_admin ?? false,
   };
 
