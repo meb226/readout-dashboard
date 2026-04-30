@@ -16,16 +16,6 @@ import { useEffect } from "react";
 // in production; vite.config.ts proxies it to localhost:8000 in dev.
 export function Login() {
   useEffect(() => {
-    // ML-534 telemetry: this fires every time the SPA lands on /login.
-    // If we see this in a loop, it tells us we're being bounced here
-    // by either RequireAuth (session null) or apiFetch (401). The
-    // matching [ml534] log just before this one names the source.
-    // Strip after diagnosis.
-    console.log("[ml534] Login mounted, redirecting to /auth/login", {
-      pathname: window.location.pathname,
-      search: window.location.search,
-      referrer: document.referrer,
-    });
     window.location.href = "/auth/login";
   }, []);
   return (

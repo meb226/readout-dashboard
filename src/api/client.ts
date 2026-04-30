@@ -40,13 +40,6 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   // need to special-case auth — the page redirects before they run.
   // The /login path itself is exempt: it has no API calls.
   if (res.status === 401 && typeof window !== "undefined") {
-    // ML-534 telemetry: identify which endpoint produced the 401
-    // that's bouncing us to /login. Strip after diagnosis.
-    console.log("[ml534] apiFetch 401", {
-      path,
-      currentPath: window.location.pathname,
-      willRedirect: !window.location.pathname.startsWith("/login"),
-    });
     if (!window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
     }
