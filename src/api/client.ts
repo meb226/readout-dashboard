@@ -24,6 +24,8 @@ import type {
   SubscriptionsResponse,
   SubscribeResponse,
   UnsubscribeResponse,
+  SubscribeOrPaymentRequired,
+  BillingSummary,
 } from "../types/api";
 
 const API_BASE = "";
@@ -188,14 +190,55 @@ export async function fetchSubscriptions(): Promise<SubscriptionsResponse> {
   return apiFetch("/api/subscriptions");
 }
 
+// ML-537: subscribe response is now a union — server returns either
+// the standard SubscribeResponse (free) or PaymentRequiredResponse
+// (would-be 4th+ committee). Caller checks via isPaymentRequired().
 export async function subscribeToCommittee(
   committeeId: string,
-): Promise<SubscribeResponse> {
+): Promise<SubscribeOrPaymentRequired> {
   return apiFetch(`/api/subscriptions/${committeeId}`, { method: "POST" });
+}
+
+// ML-537: confirm-paid runs the full Stripe charge → DB write atomic
+// path. Returns the standard SubscribeResponse plus paid: true and
+// charged_amount_cents, OR throws on charge failure (mapped to 402
+// server-side, which the apiFetch error handler turns into an Error
+// the modal renders verbatim).
+export async function confirmPaidSubscribe(
+  committeeId: string,
+): Promise<SubscribeResponse> {
+  return apiFetch(`/api/subscriptions/${committeeId}/confirm-paid`, {
+    method: "POST",
+  });
+}
+
+// ML-537 Layer 2: admin-only ops bypass — inserts admin_comped row
+// without any Stripe call. Routed through /api/admin so non-admins
+// 403 server-side regardless of any frontend gating.
+export async function adminForceSubscribe(
+  committeeId: string,
+): Promise<SubscribeResponse> {
+  return apiFetch(`/api/admin/subscriptions/${committeeId}/force`, {
+    method: "POST",
+  });
 }
 
 export async function unsubscribeFromCommittee(
   committeeId: string,
 ): Promise<UnsubscribeResponse> {
   return apiFetch(`/api/subscriptions/${committeeId}`, { method: "DELETE" });
+}
+
+// --- Billing (ML-537) ---
+
+export async function fetchBillingSummary(): Promise<BillingSummary> {
+  return apiFetch("/api/billing/summary");
+}
+
+export async function startBaseCheckout(): Promise<{ url: string }> {
+  return apiFetch("/api/billing/checkout-base", { method: "POST" });
+}
+
+export async function openBillingPortal(): Promise<{ url: string }> {
+  return apiFetch("/api/billing/portal", { method: "POST" });
 }
