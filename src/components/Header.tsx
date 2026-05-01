@@ -1,4 +1,5 @@
 import { useStats } from "../hooks/useStats";
+import { useBillingSummary } from "../hooks/useBilling";
 import { useAuth } from "../auth/AuthProvider";
 
 async function signOut() {
@@ -13,6 +14,7 @@ async function signOut() {
 
 export function Header() {
   const { data: stats } = useStats();
+  const { data: billing } = useBillingSummary();
   const { session } = useAuth();
 
   return (
@@ -25,6 +27,22 @@ export function Header() {
         <span className="text-[10px] font-semibold uppercase tracking-widest text-navy bg-navy-light px-2 py-0.5 rounded font-heading">
           Beta
         </span>
+        {/* ML-537 Layer 1: Stripe test-mode badge. Visible whenever
+            STRIPE_USE_TEST_MODE=true on the backend so an admin
+            iterating on the picker never confuses a real charge with
+            a test charge. Hidden when Stripe isn't configured at all. */}
+        {billing?.test_mode && billing.stripe_configured && (
+          <span
+            className="text-[10px] font-semibold uppercase tracking-widest font-heading px-2 py-0.5 rounded"
+            style={{
+              background: "var(--color-amber-light)",
+              color: "var(--color-amber)",
+            }}
+            title="Backend is using Stripe test-mode API key. Test card 4242 works; no real charges happen."
+          >
+            Stripe test mode
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-6">

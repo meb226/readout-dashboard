@@ -200,6 +200,47 @@ export interface SubscribeResponse {
   skipped_paused: number;
   paused: boolean;
   started_at: string;
+  // ML-537: present on confirm-paid responses, absent on free subscribes.
+  paid?: boolean;
+  charged_amount_cents?: number;
+  admin_comped?: boolean;
+}
+
+// ML-537: returned in place of SubscribeResponse when the user is past
+// the included quota and would owe money. Frontend opens the
+// PaidConfirmModal instead of treating this as success.
+export interface PaymentRequiredResponse {
+  requires_payment: true;
+  committee_id: string;
+  charge_amount_cents: number;
+  monthly_total_cents: number;
+  card_last4: string | null;
+  requires_billing_setup: boolean;
+}
+
+export type SubscribeOrPaymentRequired = SubscribeResponse | PaymentRequiredResponse;
+
+export function isPaymentRequired(
+  res: SubscribeOrPaymentRequired,
+): res is PaymentRequiredResponse {
+  return (res as PaymentRequiredResponse).requires_payment === true;
+}
+
+// ML-537: GET /api/billing/summary
+export interface BillingSummary {
+  included_quota: number;
+  included_used: number;
+  addon_count: number;
+  billed_addon_count: number;
+  base_price_cents: number;
+  addon_price_cents: number;
+  monthly_total_cents: number;
+  card_last4: string | null;
+  current_period_end: string | null;
+  payment_failed_at: string | null;
+  test_mode: boolean;
+  stripe_configured: boolean;
+  has_base_subscription: boolean;
 }
 
 export interface UnsubscribeResponse {
@@ -207,6 +248,9 @@ export interface UnsubscribeResponse {
   committee_id: string;
   was_last_subscriber: boolean;
   was_subscribed: boolean;
+  // ML-537: present on every unsubscribe response — true if the row
+  // dropped was admin-comped (so no Stripe sync happened).
+  was_admin_comped?: boolean;
   archived: number;
   ended_at: string | null;
 }
