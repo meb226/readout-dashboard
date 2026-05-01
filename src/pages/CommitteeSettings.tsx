@@ -22,6 +22,7 @@ import {
 } from "../hooks/useSubscriptions";
 import {
   useBillingSummary,
+  useAutoSyncBilling,
   redirectToBaseCheckout,
   redirectToBillingPortal,
 } from "../hooks/useBilling";
@@ -109,6 +110,18 @@ export function CommitteeSettings() {
   const committeesQuery = useCommittees();
   const subsQuery = useSubscriptions();
   const billingQuery = useBillingSummary();
+  // ML-537: webhook fallback. If the user paid the $149 base via
+  // Checkout but the webhook never fired (e.g., webhook secret not yet
+  // configured on the backend), the dashboard would forever bounce
+  // them through "Set up billing" instead of "Add for $49". This hook
+  // detects the mismatch and asks the server to look the user up by
+  // email and stamp the Stripe IDs onto the subscriber row. Idempotent
+  // and safe to call when the user genuinely hasn't paid yet — the
+  // server returns 404 and the hook swallows it.
+  useAutoSyncBilling(
+    billingQuery.data?.stripe_configured === true &&
+      billingQuery.data?.has_base_subscription === false,
+  );
   const { session } = useAuth();
   const subscribe = useSubscribe();
   const confirmPaid = useConfirmPaidSubscribe();

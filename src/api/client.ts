@@ -242,3 +242,17 @@ export async function startBaseCheckout(): Promise<{ url: string }> {
 export async function openBillingPortal(): Promise<{ url: string }> {
   return apiFetch("/api/billing/portal", { method: "POST" });
 }
+
+// ML-537: webhook fallback. Idempotent — already-synced rows return
+// `already_synced: true`.
+export interface SyncAfterCheckoutResponse {
+  synced: boolean;
+  already_synced: boolean;
+  customer_id: string | null;
+  subscription_id: string | null;
+  status: string | null;
+}
+
+export async function syncAfterCheckout(): Promise<SyncAfterCheckoutResponse> {
+  return apiFetch("/api/billing/sync-after-checkout", { method: "POST" });
+}
