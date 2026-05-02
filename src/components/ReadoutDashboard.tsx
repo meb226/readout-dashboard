@@ -1344,23 +1344,21 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           )}
             {/* Sign out — always visible while authed. Inline (not a
                 wrapped <Header /> import) so the existing branding/nav
-                row layout stays intact. */}
+                row layout stays intact. Email pill dropped — too
+                crowded next to search + filter dropdowns. session.email
+                is still used as the button's title attribute for hover. */}
             {session && (
-              <div className="flex items-center gap-3 text-xs">
-                <span className="hidden sm:inline" style={{ color: "#666" }} title={session.email}>
-                  {session.email}
-                </span>
-                <button
-                  type="button"
-                  onClick={signOutAndRedirect}
-                  className="px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors"
-                  style={{ borderColor: "rgba(0,0,0,0.12)", color: "#444" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "#0039A6"; e.currentTarget.style.borderColor = "#0039A6"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "#444"; e.currentTarget.style.borderColor = "rgba(0,0,0,0.12)"; }}
-                >
-                  Sign out
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={signOutAndRedirect}
+                title={`Signed in as ${session.email}`}
+                className="px-4 py-2 rounded-lg border text-sm font-semibold transition-colors"
+                style={{ borderColor: "rgba(0,0,0,0.12)", color: "#444" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#0039A6"; e.currentTarget.style.borderColor = "#0039A6"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "#444"; e.currentTarget.style.borderColor = "rgba(0,0,0,0.12)"; }}
+              >
+                Sign out
+              </button>
             )}
           </div>
         </div>
