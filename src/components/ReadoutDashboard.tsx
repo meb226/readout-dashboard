@@ -1232,13 +1232,13 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           </div>
 
           {/* Right side: search (dashboard only) + sign-out cluster (always) */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-6">
           {page === "dashboard" && (
             <div className="flex items-center gap-2">
               {/* ML-62: Search mode toggle + input */}
               <div className="relative">
-                <div className="flex rounded-lg overflow-hidden" style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
-                  {/* Mode toggle */}
+                <div className="flex rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.4)", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
+                  {/* Mode toggle — sized to match CommitteeDropdown / DateFilter (14px text, 10px vertical pad, 12px radius) */}
                   <select
                     value={searchMode}
                     onChange={(e) => {
@@ -1248,7 +1248,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                       setTranscriptSearchQuery("");
                       setShowTranscriptPreview(false);
                     }}
-                    className="text-[11px] font-semibold px-2 py-2 bg-transparent border-r border-white/30 focus:outline-none cursor-pointer"
+                    className="text-sm font-semibold px-3 py-2.5 bg-transparent border-r border-white/30 focus:outline-none cursor-pointer"
                     style={{ color: "#0039A6" }}
                   >
                     <option value="hearings">Hearings</option>
@@ -1277,8 +1277,8 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                       setTimeout(() => setShowTranscriptPreview(false), 200);
                     }}
                     placeholder={searchMode === "hearings" ? "Search titles..." : "Search transcripts..."}
-                    className="text-sm pr-8 pl-3 py-2 bg-transparent focus:outline-none transition-colors"
-                    style={{ width: 190 }}
+                    className="text-sm pr-8 pl-3 py-2.5 bg-transparent focus:outline-none transition-colors"
+                    style={{ width: 200 }}
                   />
                   {(searchQuery || transcriptSearchQuery) && (
                     <button onClick={() => { setSearchQuery(""); setTranscriptSearchQuery(""); setShowTranscriptPreview(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#999] hover:text-[#444] text-sm font-bold leading-none" style={{ background: "none", border: "none", cursor: "pointer" }}>×</button>
