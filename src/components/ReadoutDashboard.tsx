@@ -24,6 +24,18 @@ import { TranscriptViewer } from "./TranscriptViewer";
 import { TranscriptSearch } from "./TranscriptSearch";
 import { useTranscriptSearch } from "../hooks/useTranscriptSearch";
 import type { TranscriptSearchHit } from "../types/api";
+import { useAuth } from "../auth/AuthProvider";
+
+// Sign-out lives in the dashboard header so it's reachable from
+// every authed page, not just /settings/committees.
+async function signOutAndRedirect() {
+  try {
+    await fetch("/auth/logout", { method: "POST", credentials: "include" });
+  } catch {
+    // Cookie clear is best-effort; redirect regardless.
+  }
+  window.location.assign("/login");
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -1029,6 +1041,7 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const queryClient = useQueryClient();
   const { data: committees } = useCommittees();
   const { data, isLoading } = useHearings({ limit: 250 });
+  const { session } = useAuth();
 
   const countMap = new Map<string, number>();
   // Build counts from raw data
@@ -1218,6 +1231,8 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
             </div>
           </div>
 
+          {/* Right side: search (dashboard only) + sign-out cluster (always) */}
+          <div className="flex items-center gap-3">
           {page === "dashboard" && (
             <div className="flex items-center gap-2">
               {/* ML-62: Search mode toggle + input */}
@@ -1327,6 +1342,27 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
               <DateFilter month={monthFilter} year={yearFilter} onChangeMonth={setMonthFilter} onChangeYear={setYearFilter} />
             </div>
           )}
+            {/* Sign out — always visible while authed. Inline (not a
+                wrapped <Header /> import) so the existing branding/nav
+                row layout stays intact. */}
+            {session && (
+              <div className="flex items-center gap-3 text-xs">
+                <span className="hidden sm:inline" style={{ color: "#666" }} title={session.email}>
+                  {session.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={signOutAndRedirect}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors"
+                  style={{ borderColor: "rgba(0,0,0,0.12)", color: "#444" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#0039A6"; e.currentTarget.style.borderColor = "#0039A6"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#444"; e.currentTarget.style.borderColor = "rgba(0,0,0,0.12)"; }}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ─── Saved Page ─── */}
