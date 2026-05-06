@@ -256,3 +256,92 @@ export interface SyncAfterCheckoutResponse {
 export async function syncAfterCheckout(): Promise<SyncAfterCheckoutResponse> {
   return apiFetch("/api/billing/sync-after-checkout", { method: "POST" });
 }
+
+// --- Admin hearing force-run (ML-535) ---
+
+export interface AdminActionResponse {
+  event_id: string;
+  action: string;
+  job_status: string;
+  hearing_id: string | null;
+  // /rerun fields
+  manifest_cleared?: boolean;
+  phase_a_preserved?: boolean;
+  artifacts_deleted?: number;
+  // /prep fields (when manual_url is used)
+  url_used?: string;
+  url_source?: string;
+}
+
+export interface AdminHearingState {
+  event_id: string;
+  hearing_id: string | null;
+  hearing: Record<string, unknown>;
+  resolution: Record<string, unknown> | null;
+  prep_job: {
+    status: string;
+    started_at: string | null;
+    completed_at: string | null;
+    error: string | null;
+    hearing_id: string | null;
+  } | null;
+  process_job: {
+    status: string;
+    started_at: string | null;
+    completed_at: string | null;
+    error: string | null;
+    hearing_id: string | null;
+  } | null;
+  manifest: {
+    hearing_id: string;
+    is_prep_complete: boolean;
+    is_background_complete: boolean;
+    stages: Record<string, {
+      completed_at: string | null;
+      duration_seconds: number | null;
+      error: string | null;
+    }>;
+  } | null;
+}
+
+export interface AdminPrepBody {
+  manual_url?: string;
+  skip_resolver?: boolean;
+}
+
+export async function adminForcePrep(
+  eventId: string,
+  body: AdminPrepBody = {},
+): Promise<AdminActionResponse> {
+  return apiFetch(`/api/admin/hearings/${eventId}/prep`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function adminForceProcess(eventId: string): Promise<AdminActionResponse> {
+  return apiFetch(`/api/admin/hearings/${eventId}/process`, { method: "POST" });
+}
+
+export async function adminRerunPhaseB(eventId: string): Promise<AdminActionResponse> {
+  return apiFetch(`/api/admin/hearings/${eventId}/rerun`, { method: "POST" });
+}
+
+export interface AdminResolveResponse {
+  event_id: string;
+  action: string;
+  url: string;
+  source_type: string;
+  validation: string;
+  resolved_at: string;
+}
+
+export async function adminForceResolve(
+  eventId: string,
+): Promise<AdminResolveResponse> {
+  return apiFetch(`/api/admin/hearings/${eventId}/resolve`, { method: "POST" });
+}
+
+export async function adminFetchHearingState(eventId: string): Promise<AdminHearingState> {
+  return apiFetch(`/api/admin/hearings/${eventId}/state`);
+}
