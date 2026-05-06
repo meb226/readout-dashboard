@@ -9,7 +9,7 @@
  * v1 deferrals (separate follow-up):
  *  - Resolver force-run for DETECTED hearings (no button shown)
  *  - Manual video-URL override
- *  - Filter UI for committee / date range (just title-search for now)
+ *  - Date-range filter (title search + committee + status filters land in v1.1)
  *  - Pretty confirmation modals (uses window.confirm)
  */
 import { useMemo, useState } from "react";
@@ -19,11 +19,22 @@ import {
   adminForcePrep,
   adminForceProcess,
   adminRerunPhaseB,
+  fetchCommittees,
   fetchHearings,
   type AdminActionResponse,
   type AdminHearingState,
 } from "../api/client";
 import type { HearingListItem, HearingStatus } from "../types/api";
+
+type SortColumn = "status" | "hearing_date" | "committee_name" | "title" | "event_id";
+type SortDirection = "asc" | "desc";
+
+interface SortState {
+  column: SortColumn;
+  direction: SortDirection;
+}
+
+const DEFAULT_SORT: SortState = { column: "status", direction: "asc" };
 
 const STATUS_ORDER: HearingStatus[] = [
   "failed",
@@ -53,7 +64,15 @@ export function AdminHearings() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<HearingStatus | "all">("all");
+  const [committeeFilter, setCommitteeFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [openStateFor, setOpenStateFor] = useState<string | null>(null);
+
+  const { data: committees } = useQuery({
+    queryKey: ["committees"],
+    queryFn: fetchCommittees,
+    staleTime: 5 * 60_000, // committee list rarely changes
+  });
 
   // Pull a healthy chunk of hearings. There are ~500 active hearings;
   // the backend caps at 200 per request, so we paginate via offset.
@@ -96,6 +115,9 @@ export function AdminHearings() {
     if (statusFilter !== "all") {
       list = list.filter((h) => h.status === statusFilter);
     }
+    if (committeeFilter !== "all") {
+      list = list.filter((h) => h.committee_id === committeeFilter);
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -105,14 +127,49 @@ export function AdminHearings() {
           h.event_id.toLowerCase().includes(q),
       );
     }
-    // Sort by status priority (failed/active first), then by date desc
+    // Sort by the active column. Status sorts by urgency order
+    // (failed/active first); other columns are simple string compare.
+    // Date is parsed lex via ISO format so localeCompare DTRT.
+    const dir = sort.direction === "asc" ? 1 : -1;
     return [...list].sort((a, b) => {
-      const sa = STATUS_ORDER.indexOf(a.status);
-      const sb = STATUS_ORDER.indexOf(b.status);
-      if (sa !== sb) return sa - sb;
-      return b.hearing_date.localeCompare(a.hearing_date);
+      let cmp = 0;
+      switch (sort.column) {
+        case "status": {
+          const sa = STATUS_ORDER.indexOf(a.status);
+          const sb = STATUS_ORDER.indexOf(b.status);
+          cmp = sa - sb;
+          // Tiebreak: most recent first within each status bucket
+          if (cmp === 0) cmp = b.hearing_date.localeCompare(a.hearing_date) * dir;
+          else cmp = cmp * dir;
+          return cmp;
+        }
+        case "hearing_date":
+          cmp = a.hearing_date.localeCompare(b.hearing_date);
+          break;
+        case "committee_name":
+          cmp = a.committee_name.localeCompare(b.committee_name);
+          break;
+        case "title":
+          cmp = a.title.localeCompare(b.title);
+          break;
+        case "event_id":
+          cmp = a.event_id.localeCompare(b.event_id);
+          break;
+      }
+      return cmp * dir;
     });
-  }, [allHearings, statusFilter, search]);
+  }, [allHearings, statusFilter, committeeFilter, search, sort]);
+
+  const handleSort = (column: SortColumn) => {
+    setSort((prev) => {
+      if (prev.column === column) {
+        return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      // First click on a new column: ascending for text/date,
+      // ascending for status (urgency-first is already the "low" end)
+      return { column, direction: "asc" };
+    });
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-hearings"] });
@@ -221,6 +278,49 @@ export function AdminHearings() {
             </option>
           ))}
         </select>
+        <select
+          value={committeeFilter}
+          onChange={(e) => setCommitteeFilter(e.target.value)}
+          style={{
+            padding: "6px 10px",
+            border: "1px solid #ccc",
+            borderRadius: 4,
+            fontSize: 14,
+            maxWidth: 280,
+          }}
+        >
+          <option value="all">All committees</option>
+          {(committees ?? [])
+            .slice()
+            .sort((a, b) => a.committee_name.localeCompare(b.committee_name))
+            .map((c) => (
+              <option key={c.committee_id} value={c.committee_id}>
+                {c.committee_name}
+              </option>
+            ))}
+        </select>
+        {(statusFilter !== "all" ||
+          committeeFilter !== "all" ||
+          search.trim()) && (
+          <button
+            onClick={() => {
+              setStatusFilter("all");
+              setCommitteeFilter("all");
+              setSearch("");
+            }}
+            style={{
+              padding: "6px 12px",
+              border: "1px solid #999",
+              borderRadius: 4,
+              fontSize: 13,
+              background: "white",
+              color: "#666",
+              cursor: "pointer",
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <table
@@ -237,11 +337,21 @@ export function AdminHearings() {
               textAlign: "left",
             }}
           >
-            <th style={{ padding: "8px 6px" }}>Status</th>
-            <th style={{ padding: "8px 6px" }}>Date</th>
-            <th style={{ padding: "8px 6px" }}>Committee</th>
-            <th style={{ padding: "8px 6px" }}>Title</th>
-            <th style={{ padding: "8px 6px" }}>event_id</th>
+            <SortableTh column="status" sort={sort} onSort={handleSort}>
+              Status
+            </SortableTh>
+            <SortableTh column="hearing_date" sort={sort} onSort={handleSort}>
+              Date
+            </SortableTh>
+            <SortableTh column="committee_name" sort={sort} onSort={handleSort}>
+              Committee
+            </SortableTh>
+            <SortableTh column="title" sort={sort} onSort={handleSort}>
+              Title
+            </SortableTh>
+            <SortableTh column="event_id" sort={sort} onSort={handleSort}>
+              event_id
+            </SortableTh>
             <th style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
               Actions
             </th>
@@ -281,6 +391,43 @@ export function AdminHearings() {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SortableTh({
+  column,
+  sort,
+  onSort,
+  children,
+}: {
+  column: SortColumn;
+  sort: SortState;
+  onSort: (col: SortColumn) => void;
+  children: React.ReactNode;
+}) {
+  const isActive = sort.column === column;
+  const arrow = !isActive ? "↕" : sort.direction === "asc" ? "↑" : "↓";
+  return (
+    <th
+      style={{
+        padding: "8px 6px",
+        cursor: "pointer",
+        userSelect: "none",
+        color: isActive ? "#0039A6" : "#333",
+      }}
+      onClick={() => onSort(column)}
+    >
+      {children}{" "}
+      <span
+        style={{
+          fontSize: 11,
+          color: isActive ? "#0039A6" : "#bbb",
+          marginLeft: 2,
+        }}
+      >
+        {arrow}
+      </span>
+    </th>
   );
 }
 
