@@ -8,13 +8,14 @@
  */
 
 import { useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Link } from "react-router-dom";
 import { ReadoutDashboard } from "./components/ReadoutDashboard";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
 import { Login } from "./pages/Login";
 import { NoAccess } from "./pages/NoAccess";
 import { CommitteeSettings } from "./pages/CommitteeSettings";
+import { AdminHearings } from "./pages/AdminHearings";
 
 function Dashboard() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -26,16 +27,18 @@ function Dashboard() {
   );
 }
 
-function AdminPlaceholder() {
-  // ML-327: Admin shell sub-issue (ML-328) will replace this with
-  // the actual sidebar + page layout. For now we just confirm auth
-  // is wired correctly.
+function AdminIndex() {
+  // ML-327 admin landing — once the shell is built (ML-328) this will
+  // be replaced by a sidebar layout. For now it lists the admin views
+  // that exist.
   return (
     <div style={{ padding: 32, fontFamily: "Inter, sans-serif" }}>
       <h1>Admin</h1>
-      <p style={{ color: "#666" }}>
-        Admin shell — sub-issues of ML-327 will populate this.
-      </p>
+      <ul style={{ lineHeight: 1.8 }}>
+        <li>
+          <Link to="/admin/hearings">Hearings — force-run any pipeline stage</Link>
+        </li>
+      </ul>
     </div>
   );
 }
@@ -46,10 +49,18 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/no-access" element={<NoAccess />} />
       <Route
-        path="/admin/*"
+        path="/admin"
         element={
           <RequireAdmin>
-            <AdminPlaceholder />
+            <AdminIndex />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/hearings"
+        element={
+          <RequireAdmin>
+            <AdminHearings />
           </RequireAdmin>
         }
       />
