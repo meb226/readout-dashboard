@@ -190,40 +190,40 @@ export function AdminHearings() {
       const urlNote =
         resp.url_source === "manual" ? `\nmanual URL: ${resp.url_used}` : "";
       window.alert(
-        `Phase A submitted for ${resp.event_id}\nstatus: ${resp.job_status}${urlNote}`,
+        `Transcribe queued for ${resp.event_id}\nstatus: ${resp.job_status}${urlNote}`,
       );
     },
-    onError: (e: Error) => window.alert(`Prep failed: ${e.message}`),
+    onError: (e: Error) => window.alert(`Transcribe failed: ${e.message}`),
   });
   const resolveMutation = useMutation({
     mutationFn: adminForceResolve,
     onSuccess: (resp: AdminResolveResponse) => {
       invalidate();
       window.alert(
-        `Resolved ${resp.event_id}\nURL: ${resp.url}\nsource: ${resp.source_type} (${resp.validation})`,
+        `Found video for ${resp.event_id}\nURL: ${resp.url}\nsource: ${resp.source_type} (${resp.validation})`,
       );
     },
-    onError: (e: Error) => window.alert(`Resolve failed: ${e.message}`),
+    onError: (e: Error) => window.alert(`Find video failed: ${e.message}`),
   });
   const processMutation = useMutation({
     mutationFn: adminForceProcess,
     onSuccess: (resp: AdminActionResponse) => {
       invalidate();
       window.alert(
-        `Phase B submitted for ${resp.event_id}\nstatus: ${resp.job_status}`,
+        `Make brief queued for ${resp.event_id}\nstatus: ${resp.job_status}`,
       );
     },
-    onError: (e: Error) => window.alert(`Process failed: ${e.message}`),
+    onError: (e: Error) => window.alert(`Make brief failed: ${e.message}`),
   });
   const rerunMutation = useMutation({
     mutationFn: adminRerunPhaseB,
     onSuccess: (resp: AdminActionResponse) => {
       invalidate();
       window.alert(
-        `Re-run submitted for ${resp.event_id}\nartifacts_deleted: ${resp.artifacts_deleted ?? "?"}\nphase_a_preserved: ${resp.phase_a_preserved}`,
+        `Remake queued for ${resp.event_id}\nartifacts_deleted: ${resp.artifacts_deleted ?? "?"}\ntranscript_preserved: ${resp.phase_a_preserved}`,
       );
     },
-    onError: (e: Error) => window.alert(`Re-run failed: ${e.message}`),
+    onError: (e: Error) => window.alert(`Remake failed: ${e.message}`),
   });
 
   // ---- Bulk runner ----
@@ -296,9 +296,11 @@ export function AdminHearings() {
       </div>
 
       <p style={{ color: "#666", marginTop: 4, fontSize: 13 }}>
-        Force-run any hearing through any stage. Bypasses AutoProcessor
-        schedule and pause. Re-run wipes Phase B blobs atomically before
-        resubmitting.
+        Force any hearing through any stage. Hover a button for details.
+        Order of operations: <strong>Find video</strong> →{" "}
+        <strong>Transcribe</strong> → <strong>Make brief</strong>.{" "}
+        <strong>Remake</strong> wipes the brief outputs and regenerates
+        them (transcript preserved).
       </p>
 
       <FilterBar
@@ -539,8 +541,8 @@ function BulkToolbar({
       >
         <span style={{ flex: 1, color: "#333" }}>
           {bulkConfirming === "process"
-            ? `Submit Phase B for ${selected.size} hearing${selected.size === 1 ? "" : "s"}?`
-            : `Wipe Phase B blobs and re-run ${selected.size} hearing${selected.size === 1 ? "" : "s"}? Phase A preserved.`}
+            ? `Make briefs for ${selected.size} hearing${selected.size === 1 ? "" : "s"}?`
+            : `Wipe and remake briefs for ${selected.size} hearing${selected.size === 1 ? "" : "s"}? (transcripts preserved)`}
         </span>
         <SmallButton
           label={bulkRunning ? "Running…" : "Confirm"}
@@ -569,9 +571,12 @@ function BulkToolbar({
       <span style={{ flex: 1, color: "#333", fontWeight: 500 }}>
         {selected.size} selected
       </span>
-      <SmallButton label="Process selected" onClick={() => onBulkAction("process")} />
       <SmallButton
-        label="Re-run B selected"
+        label="Make briefs for selected"
+        onClick={() => onBulkAction("process")}
+      />
+      <SmallButton
+        label="Remake selected"
         onClick={() => onBulkAction("rerun")}
         danger
       />
@@ -759,8 +764,8 @@ function InlineConfirm({
 
   const prompt =
     action === "process"
-      ? "Submit Phase B?"
-      : "Wipe Phase B blobs and re-run? (transcript preserved)";
+      ? "Make brief?"
+      : "Wipe and remake the brief? (transcript preserved)";
 
   return (
     <div
@@ -824,10 +829,12 @@ function ActionButtons({
     label: string,
     onClick: () => void,
     isExpected: boolean,
+    tooltip: string,
     danger = false,
   ) => (
     <button
       onClick={onClick}
+      title={tooltip}
       style={{
         marginRight: 4,
         padding: "3px 8px",
@@ -846,13 +853,51 @@ function ActionButtons({
 
   return (
     <>
-      {btn("Resolve", onResolve, expectedAction === "resolve")}
-      {btn("Prep", onPrep, expectedAction === "prep")}
-      {btn("URL…", onPrepWithUrl, false)}
-      {btn("Process", onProcess, expectedAction === "process")}
-      {btn("Re-run B", onRerun, expectedAction === "rerun", true)}
+      {btn(
+        "Find video",
+        onResolve,
+        expectedAction === "resolve",
+        "Look up the video URL on Congress.gov / YouTube / Senate ISVP. Use this on hearings where we know the meeting exists but haven't found the recording yet.",
+      )}
+      {btn(
+        "Transcribe",
+        onPrep,
+        expectedAction === "prep",
+        "Download the audio, run it through Deepgram, identify speakers. Needs a video URL already in place.",
+      )}
+      {btn(
+        "Make brief",
+        onProcess,
+        expectedAction === "process",
+        "Generate the memo, audio brief, podcast, and audiogram. Needs the transcript done.",
+      )}
+      {btn(
+        "Remake",
+        onRerun,
+        expectedAction === "rerun",
+        "Wipe the brief outputs (memo, audio, video, podcast) and regenerate. The transcript is preserved.",
+        true,
+      )}
+      <span
+        style={{
+          display: "inline-block",
+          width: 1,
+          height: 16,
+          background: "#ddd",
+          margin: "0 6px 0 2px",
+          verticalAlign: "middle",
+        }}
+        aria-hidden
+      />
+      {btn(
+        "Use my URL…",
+        onPrepWithUrl,
+        false,
+        "Manual override. Paste a video URL by hand and run transcription against it. Skips Find video entirely. Useful when the auto-finder can't reach the video, or you want to test a known-good URL.",
+      )}
       <button
         onClick={onToggleState}
+        title="Show the raw state JSON for debugging: hearing row, video resolution, job records, manifest stages."
         style={{
           marginLeft: 4,
           padding: "3px 8px",
@@ -864,7 +909,7 @@ function ActionButtons({
           cursor: "pointer",
         }}
       >
-        {isStateOpen ? "Hide state" : "State"}
+        {isStateOpen ? "Hide" : "Inspect"}
       </button>
     </>
   );
@@ -984,15 +1029,20 @@ function StatePanel({ eventId }: { eventId: string }) {
   if (!data) return <div style={{ padding: 12, color: "#666" }}>No data.</div>;
 
   return (
-    <div style={{ padding: 12 }}>
+    <div style={{ padding: 12, maxWidth: "100%", boxSizing: "border-box" }}>
       <pre
         style={{
           background: "white",
           padding: 12,
           fontSize: 11,
           fontFamily: "IBM Plex Mono, monospace",
-          overflow: "auto",
+          // pre-wrap keeps the JSON's intentional line breaks and indentation,
+          // and break-word lets long URLs / hearing_ids wrap mid-token instead
+          // of blowing out the table width.
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
           maxHeight: 400,
+          overflowY: "auto",
           margin: 0,
           border: "1px solid #ddd",
           borderRadius: 4,
