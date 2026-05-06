@@ -18,11 +18,13 @@ import {
   adminFetchHearingState,
   adminForcePrep,
   adminForceProcess,
+  adminForceResolve,
   adminRerunPhaseB,
   fetchCommittees,
   fetchHearings,
   type AdminActionResponse,
   type AdminHearingState,
+  type AdminResolveResponse,
 } from "../api/client";
 import type { HearingListItem, HearingStatus } from "../types/api";
 
@@ -178,14 +180,32 @@ export function AdminHearings() {
   };
 
   const prepMutation = useMutation({
-    mutationFn: adminForcePrep,
+    mutationFn: ({ eventId, manualUrl }: { eventId: string; manualUrl?: string }) =>
+      adminForcePrep(eventId, manualUrl ? { manual_url: manualUrl } : {}),
     onSuccess: (resp: AdminActionResponse) => {
       invalidate();
+      const urlNote =
+        resp.url_source === "manual"
+          ? `\nmanual URL: ${resp.url_used}`
+          : "";
       window.alert(
-        `Phase A submitted for ${resp.event_id}\nstatus: ${resp.job_status}`,
+        `Phase A submitted for ${resp.event_id}\n` +
+          `status: ${resp.job_status}${urlNote}`,
       );
     },
     onError: (e: Error) => window.alert(`Prep failed: ${e.message}`),
+  });
+  const resolveMutation = useMutation({
+    mutationFn: adminForceResolve,
+    onSuccess: (resp: AdminResolveResponse) => {
+      invalidate();
+      window.alert(
+        `Resolved ${resp.event_id}\n` +
+          `URL: ${resp.url}\n` +
+          `source: ${resp.source_type} (${resp.validation})`,
+      );
+    },
+    onError: (e: Error) => window.alert(`Resolve failed: ${e.message}`),
   });
   const processMutation = useMutation({
     mutationFn: adminForceProcess,
@@ -362,7 +382,20 @@ export function AdminHearings() {
             <Row
               key={h.event_id}
               h={h}
-              onPrep={(id) => prepMutation.mutate(id)}
+              onResolve={(id) => resolveMutation.mutate(id)}
+              onPrep={(id) => prepMutation.mutate({ eventId: id })}
+              onPrepWithUrl={(id) => {
+                const url = window.prompt(
+                  `Manual video URL for ${id}.\n\n` +
+                    `This bypasses the resolver and persists as a "manual" ` +
+                    `resolution. Useful for testing a known-good URL or for ` +
+                    `hearings the resolver can't reach.`,
+                  "",
+                );
+                if (url && url.trim()) {
+                  prepMutation.mutate({ eventId: id, manualUrl: url.trim() });
+                }
+              }}
               onProcess={(id) => {
                 if (window.confirm(`Submit Phase B for ${id}?`)) {
                   processMutation.mutate(id);
@@ -372,9 +405,9 @@ export function AdminHearings() {
                 if (
                   window.confirm(
                     `Re-run Phase B for ${id}?\n\n` +
-                      `This wipes the hearing manifest. The pipeline will overwrite ` +
-                      `existing memo / audio / video artifacts on the next run. ` +
-                      `Phase A (transcript) is preserved.`,
+                      `Atomic clear: wipes the manifest and the Phase B blobs ` +
+                      `(memo, audio brief, audiogram, video, podcast). ` +
+                      `Phase A (audio + transcript + speakers) is preserved.`,
                   )
                 ) {
                   rerunMutation.mutate(id);
@@ -433,7 +466,9 @@ function SortableTh({
 
 interface RowProps {
   h: HearingListItem;
+  onResolve: (id: string) => void;
   onPrep: (id: string) => void;
+  onPrepWithUrl: (id: string) => void;
   onProcess: (id: string) => void;
   onRerun: (id: string) => void;
   onToggleState: () => void;
@@ -442,7 +477,9 @@ interface RowProps {
 
 function Row({
   h,
+  onResolve,
   onPrep,
+  onPrepWithUrl,
   onProcess,
   onRerun,
   onToggleState,
@@ -483,7 +520,9 @@ function Row({
         <td style={{ padding: "6px", whiteSpace: "nowrap" }}>
           <ActionButtons
             status={h.status}
+            onResolve={() => onResolve(h.event_id)}
             onPrep={() => onPrep(h.event_id)}
+            onPrepWithUrl={() => onPrepWithUrl(h.event_id)}
             onProcess={() => onProcess(h.event_id)}
             onRerun={() => onRerun(h.event_id)}
             onToggleState={onToggleState}
@@ -504,14 +543,18 @@ function Row({
 
 function ActionButtons({
   status,
+  onResolve,
   onPrep,
+  onPrepWithUrl,
   onProcess,
   onRerun,
   onToggleState,
   isStateOpen,
 }: {
   status: HearingStatus;
+  onResolve: () => void;
   onPrep: () => void;
+  onPrepWithUrl: () => void;
   onProcess: () => void;
   onRerun: () => void;
   onToggleState: () => void;
@@ -521,14 +564,16 @@ function ActionButtons({
   // force any action. Visual emphasis (filled vs outlined) signals
   // which action is the "expected" next step for the hearing's
   // current status.
-  const expectedAction: "prep" | "process" | "rerun" | "none" =
-    status === "resolved"
-      ? "prep"
-      : status === "ready"
-        ? "process"
-        : status === "complete" || status === "failed"
-          ? "rerun"
-          : "none";
+  const expectedAction: "resolve" | "prep" | "process" | "rerun" | "none" =
+    status === "detected"
+      ? "resolve"
+      : status === "resolved"
+        ? "prep"
+        : status === "ready"
+          ? "process"
+          : status === "complete" || status === "failed"
+            ? "rerun"
+            : "none";
 
   const btn = (
     label: string,
@@ -556,7 +601,9 @@ function ActionButtons({
 
   return (
     <>
+      {btn("Resolve", onResolve, expectedAction === "resolve")}
       {btn("Prep", onPrep, expectedAction === "prep")}
+      {btn("URL…", onPrepWithUrl, false)}
       {btn("Process", onProcess, expectedAction === "process")}
       {btn("Re-run B", onRerun, expectedAction === "rerun", true)}
       <button
