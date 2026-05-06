@@ -418,7 +418,7 @@ function FilterBar({
   onStatusFilter: (v: HearingStatus | "all") => void;
   committeeFilter: string;
   onCommitteeFilter: (v: string) => void;
-  committees: { committee_id: string; committee_name: string }[];
+  committees: { committee_id: string; name: string }[];
   onClear: () => void;
 }) {
   const hasActive =
@@ -472,10 +472,10 @@ function FilterBar({
         <option value="all">All committees</option>
         {committees
           .slice()
-          .sort((a, b) => a.committee_name.localeCompare(b.committee_name))
+          .sort((a, b) => a.name.localeCompare(b.name))
           .map((c) => (
             <option key={c.committee_id} value={c.committee_id}>
-              {c.committee_name}
+              {c.name}
             </option>
           ))}
       </select>
