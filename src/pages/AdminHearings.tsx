@@ -6,11 +6,15 @@
  * and force it through stage X right now" — operator + debugging tool,
  * not customer-facing UI.
  *
- * v1 deferrals (separate follow-up):
- *  - Resolver force-run for DETECTED hearings (no button shown)
- *  - Manual video-URL override
- *  - Date-range filter (title search + committee + status filters land in v1.1)
- *  - Pretty confirmation modals (uses window.confirm)
+ * Confirmation style: inline. Destructive actions flip the row (or
+ * the bulk toolbar) into a Confirm/Cancel prompt instead of opening
+ * a separate dialog. Cheaper context-switch when running 5 hearings
+ * in a row during ops work.
+ *
+ * Bulk ops: checkbox per row + select-all-visible in the header. When
+ * any rows are selected, a toolbar appears with bulk Process and
+ * bulk Re-run B buttons. Bulk fires N parallel mutations and surfaces
+ * a single summary alert with success/fail counts.
  */
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,10 +34,17 @@ import type { HearingListItem, HearingStatus } from "../types/api";
 
 type SortColumn = "status" | "hearing_date" | "committee_name" | "title" | "event_id";
 type SortDirection = "asc" | "desc";
+type RowConfirmAction = "process" | "rerun" | "url";
+type BulkAction = "process" | "rerun";
 
 interface SortState {
   column: SortColumn;
   direction: SortDirection;
+}
+
+interface RowConfirmState {
+  eventId: string;
+  action: RowConfirmAction;
 }
 
 const DEFAULT_SORT: SortState = { column: "status", direction: "asc" };
@@ -69,20 +80,23 @@ export function AdminHearings() {
   const [committeeFilter, setCommitteeFilter] = useState<string>("all");
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [openStateFor, setOpenStateFor] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<RowConfirmState | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkConfirming, setBulkConfirming] = useState<BulkAction | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   const { data: committees } = useQuery({
     queryKey: ["committees"],
     queryFn: fetchCommittees,
-    staleTime: 5 * 60_000, // committee list rarely changes
+    staleTime: 5 * 60_000,
   });
 
-  // Pull a healthy chunk of hearings. There are ~500 active hearings;
-  // the backend caps at 200 per request, so we paginate via offset.
+  // Pull a healthy chunk of hearings (~600 rows in 3 pages of 200)
   const { data: page1 } = useQuery({
     queryKey: ["admin-hearings", "page1"],
     queryFn: () => fetchHearings({ limit: 200, offset: 0 }),
     staleTime: 30_000,
-    refetchInterval: 15_000, // refresh every 15s so job status changes show up
+    refetchInterval: 15_000,
   });
   const { data: page2 } = useQuery({
     queryKey: ["admin-hearings", "page2"],
@@ -103,7 +117,6 @@ export function AdminHearings() {
       ...(page2?.hearings ?? []),
       ...(page3?.hearings ?? []),
     ];
-    // Dedup by event_id in case pages overlap
     const seen = new Set<string>();
     return merged.filter((h) => {
       if (seen.has(h.event_id)) return false;
@@ -114,12 +127,9 @@ export function AdminHearings() {
 
   const filtered = useMemo(() => {
     let list = allHearings;
-    if (statusFilter !== "all") {
-      list = list.filter((h) => h.status === statusFilter);
-    }
-    if (committeeFilter !== "all") {
+    if (statusFilter !== "all") list = list.filter((h) => h.status === statusFilter);
+    if (committeeFilter !== "all")
       list = list.filter((h) => h.committee_id === committeeFilter);
-    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -129,9 +139,6 @@ export function AdminHearings() {
           h.event_id.toLowerCase().includes(q),
       );
     }
-    // Sort by the active column. Status sorts by urgency order
-    // (failed/active first); other columns are simple string compare.
-    // Date is parsed lex via ISO format so localeCompare DTRT.
     const dir = sort.direction === "asc" ? 1 : -1;
     return [...list].sort((a, b) => {
       let cmp = 0;
@@ -140,7 +147,6 @@ export function AdminHearings() {
           const sa = STATUS_ORDER.indexOf(a.status);
           const sb = STATUS_ORDER.indexOf(b.status);
           cmp = sa - sb;
-          // Tiebreak: most recent first within each status bucket
           if (cmp === 0) cmp = b.hearing_date.localeCompare(a.hearing_date) * dir;
           else cmp = cmp * dir;
           return cmp;
@@ -162,16 +168,12 @@ export function AdminHearings() {
     });
   }, [allHearings, statusFilter, committeeFilter, search, sort]);
 
-  const handleSort = (column: SortColumn) => {
-    setSort((prev) => {
-      if (prev.column === column) {
-        return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
-      }
-      // First click on a new column: ascending for text/date,
-      // ascending for status (urgency-first is already the "low" end)
-      return { column, direction: "asc" };
-    });
-  };
+  const handleSort = (column: SortColumn) =>
+    setSort((prev) =>
+      prev.column === column
+        ? { column, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { column, direction: "asc" },
+    );
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-hearings"] });
@@ -179,18 +181,16 @@ export function AdminHearings() {
     queryClient.invalidateQueries({ queryKey: ["admin-hearing-state"] });
   };
 
+  // ---- Per-row mutations ----
   const prepMutation = useMutation({
     mutationFn: ({ eventId, manualUrl }: { eventId: string; manualUrl?: string }) =>
       adminForcePrep(eventId, manualUrl ? { manual_url: manualUrl } : {}),
     onSuccess: (resp: AdminActionResponse) => {
       invalidate();
       const urlNote =
-        resp.url_source === "manual"
-          ? `\nmanual URL: ${resp.url_used}`
-          : "";
+        resp.url_source === "manual" ? `\nmanual URL: ${resp.url_used}` : "";
       window.alert(
-        `Phase A submitted for ${resp.event_id}\n` +
-          `status: ${resp.job_status}${urlNote}`,
+        `Phase A submitted for ${resp.event_id}\nstatus: ${resp.job_status}${urlNote}`,
       );
     },
     onError: (e: Error) => window.alert(`Prep failed: ${e.message}`),
@@ -200,9 +200,7 @@ export function AdminHearings() {
     onSuccess: (resp: AdminResolveResponse) => {
       invalidate();
       window.alert(
-        `Resolved ${resp.event_id}\n` +
-          `URL: ${resp.url}\n` +
-          `source: ${resp.source_type} (${resp.validation})`,
+        `Resolved ${resp.event_id}\nURL: ${resp.url}\nsource: ${resp.source_type} (${resp.validation})`,
       );
     },
     onError: (e: Error) => window.alert(`Resolve failed: ${e.message}`),
@@ -222,13 +220,59 @@ export function AdminHearings() {
     onSuccess: (resp: AdminActionResponse) => {
       invalidate();
       window.alert(
-        `Re-run submitted for ${resp.event_id}\n` +
-          `manifest_cleared: ${resp.manifest_cleared}\n` +
-          `phase_a_preserved: ${resp.phase_a_preserved}`,
+        `Re-run submitted for ${resp.event_id}\nartifacts_deleted: ${resp.artifacts_deleted ?? "?"}\nphase_a_preserved: ${resp.phase_a_preserved}`,
       );
     },
     onError: (e: Error) => window.alert(`Re-run failed: ${e.message}`),
   });
+
+  // ---- Bulk runner ----
+  const runBulk = async (action: BulkAction) => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkRunning(true);
+    const fn = action === "process" ? adminForceProcess : adminRerunPhaseB;
+    const results = await Promise.allSettled(ids.map((id) => fn(id)));
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    const fails = results
+      .map((r, i) =>
+        r.status === "rejected"
+          ? `${ids[i]}: ${(r.reason as Error)?.message ?? "unknown"}`
+          : null,
+      )
+      .filter(Boolean) as string[];
+    setBulkRunning(false);
+    setBulkConfirming(null);
+    setSelected(new Set());
+    invalidate();
+    window.alert(
+      `${action === "process" ? "Phase B" : "Re-run"} bulk submit\n` +
+        `succeeded: ${ok} / ${ids.length}` +
+        (fails.length
+          ? `\n\nfailures:\n${fails.slice(0, 8).join("\n")}${fails.length > 8 ? `\n…and ${fails.length - 8} more` : ""}`
+          : ""),
+    );
+  };
+
+  // ---- Selection helpers ----
+  const visibleIds = useMemo(() => filtered.map((h) => h.event_id), [filtered]);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const toggleAllVisible = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const total = allHearings.length;
   const totalPages = page1?.total ?? 0;
@@ -253,110 +297,50 @@ export function AdminHearings() {
 
       <p style={{ color: "#666", marginTop: 4, fontSize: 13 }}>
         Force-run any hearing through any stage. Bypasses AutoProcessor
-        schedule and pause. Re-run wipes the manifest and the Phase B
-        artifacts will be overwritten on next pipeline pass.
+        schedule and pause. Re-run wipes Phase B blobs atomically before
+        resubmitting.
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginTop: 16,
-          marginBottom: 12,
-          alignItems: "center",
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilter={setStatusFilter}
+        committeeFilter={committeeFilter}
+        onCommitteeFilter={setCommitteeFilter}
+        committees={committees ?? []}
+        onClear={() => {
+          setStatusFilter("all");
+          setCommitteeFilter("all");
+          setSearch("");
         }}
-      >
-        <input
-          type="text"
-          placeholder="Search by title, committee, or event_id"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: "6px 10px",
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            width: 320,
-            fontSize: 14,
-          }}
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) =>
-            setStatusFilter(e.target.value as HearingStatus | "all")
-          }
-          style={{
-            padding: "6px 10px",
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            fontSize: 14,
-          }}
-        >
-          <option value="all">All statuses</option>
-          {STATUS_ORDER.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          value={committeeFilter}
-          onChange={(e) => setCommitteeFilter(e.target.value)}
-          style={{
-            padding: "6px 10px",
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            fontSize: 14,
-            maxWidth: 280,
-          }}
-        >
-          <option value="all">All committees</option>
-          {(committees ?? [])
-            .slice()
-            .sort((a, b) => a.committee_name.localeCompare(b.committee_name))
-            .map((c) => (
-              <option key={c.committee_id} value={c.committee_id}>
-                {c.committee_name}
-              </option>
-            ))}
-        </select>
-        {(statusFilter !== "all" ||
-          committeeFilter !== "all" ||
-          search.trim()) && (
-          <button
-            onClick={() => {
-              setStatusFilter("all");
-              setCommitteeFilter("all");
-              setSearch("");
-            }}
-            style={{
-              padding: "6px 12px",
-              border: "1px solid #999",
-              borderRadius: 4,
-              fontSize: 13,
-              background: "white",
-              color: "#666",
-              cursor: "pointer",
-            }}
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
+      />
 
-      <table
-        style={{
-          width: "100%",
-          fontSize: 13,
-          borderCollapse: "collapse",
-        }}
-      >
+      <BulkToolbar
+        selected={selected}
+        bulkConfirming={bulkConfirming}
+        bulkRunning={bulkRunning}
+        onClear={() => setSelected(new Set())}
+        onBulkAction={(a) => setBulkConfirming(a)}
+        onBulkConfirm={(a) => runBulk(a)}
+        onBulkCancel={() => setBulkConfirming(null)}
+      />
+
+      <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
         <thead>
-          <tr
-            style={{
-              borderBottom: "2px solid #333",
-              textAlign: "left",
-            }}
-          >
+          <tr style={{ borderBottom: "2px solid #333", textAlign: "left" }}>
+            <th style={{ padding: "8px 6px", width: 28 }}>
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleAllVisible}
+                title={
+                  allVisibleSelected
+                    ? "Deselect all visible"
+                    : "Select all visible"
+                }
+              />
+            </th>
             <SortableTh column="status" sort={sort} onSort={handleSort}>
               Status
             </SortableTh>
@@ -372,9 +356,7 @@ export function AdminHearings() {
             <SortableTh column="event_id" sort={sort} onSort={handleSort}>
               event_id
             </SortableTh>
-            <th style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
-              Actions
-            </th>
+            <th style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -382,41 +364,30 @@ export function AdminHearings() {
             <Row
               key={h.event_id}
               h={h}
-              onResolve={(id) => resolveMutation.mutate(id)}
-              onPrep={(id) => prepMutation.mutate({ eventId: id })}
-              onPrepWithUrl={(id) => {
-                const url = window.prompt(
-                  `Manual video URL for ${id}.\n\n` +
-                    `This bypasses the resolver and persists as a "manual" ` +
-                    `resolution. Useful for testing a known-good URL or for ` +
-                    `hearings the resolver can't reach.`,
-                  "",
-                );
-                if (url && url.trim()) {
-                  prepMutation.mutate({ eventId: id, manualUrl: url.trim() });
-                }
+              isSelected={selected.has(h.event_id)}
+              onToggleSelect={() => toggleOne(h.event_id)}
+              confirmingAction={
+                confirming?.eventId === h.event_id ? confirming.action : null
+              }
+              onRequestConfirm={(action) =>
+                setConfirming({ eventId: h.event_id, action })
+              }
+              onCancelConfirm={() => setConfirming(null)}
+              onResolve={() => resolveMutation.mutate(h.event_id)}
+              onPrep={() => prepMutation.mutate({ eventId: h.event_id })}
+              onPrepWithUrl={(url) =>
+                prepMutation.mutate({ eventId: h.event_id, manualUrl: url })
+              }
+              onProcess={() => {
+                processMutation.mutate(h.event_id);
+                setConfirming(null);
               }}
-              onProcess={(id) => {
-                if (window.confirm(`Submit Phase B for ${id}?`)) {
-                  processMutation.mutate(id);
-                }
-              }}
-              onRerun={(id) => {
-                if (
-                  window.confirm(
-                    `Re-run Phase B for ${id}?\n\n` +
-                      `Atomic clear: wipes the manifest and the Phase B blobs ` +
-                      `(memo, audio brief, audiogram, video, podcast). ` +
-                      `Phase A (audio + transcript + speakers) is preserved.`,
-                  )
-                ) {
-                  rerunMutation.mutate(id);
-                }
+              onRerun={() => {
+                rerunMutation.mutate(h.event_id);
+                setConfirming(null);
               }}
               onToggleState={() =>
-                setOpenStateFor(
-                  openStateFor === h.event_id ? null : h.event_id,
-                )
+                setOpenStateFor(openStateFor === h.event_id ? null : h.event_id)
               }
               isStateOpen={openStateFor === h.event_id}
             />
@@ -427,56 +398,215 @@ export function AdminHearings() {
   );
 }
 
-function SortableTh({
-  column,
-  sort,
-  onSort,
-  children,
+// ---------------------------------------------------------------------
+// Filter bar
+// ---------------------------------------------------------------------
+
+function FilterBar({
+  search,
+  onSearch,
+  statusFilter,
+  onStatusFilter,
+  committeeFilter,
+  onCommitteeFilter,
+  committees,
+  onClear,
 }: {
-  column: SortColumn;
-  sort: SortState;
-  onSort: (col: SortColumn) => void;
-  children: React.ReactNode;
+  search: string;
+  onSearch: (v: string) => void;
+  statusFilter: HearingStatus | "all";
+  onStatusFilter: (v: HearingStatus | "all") => void;
+  committeeFilter: string;
+  onCommitteeFilter: (v: string) => void;
+  committees: { committee_id: string; committee_name: string }[];
+  onClear: () => void;
 }) {
-  const isActive = sort.column === column;
-  const arrow = !isActive ? "↕" : sort.direction === "asc" ? "↑" : "↓";
+  const hasActive =
+    statusFilter !== "all" || committeeFilter !== "all" || search.trim() !== "";
   return (
-    <th
+    <div
       style={{
-        padding: "8px 6px",
-        cursor: "pointer",
-        userSelect: "none",
-        color: isActive ? "#0039A6" : "#333",
+        display: "flex",
+        gap: 12,
+        marginTop: 16,
+        marginBottom: 12,
+        alignItems: "center",
       }}
-      onClick={() => onSort(column)}
     >
-      {children}{" "}
-      <span
+      <input
+        type="text"
+        placeholder="Search by title, committee, or event_id"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
         style={{
-          fontSize: 11,
-          color: isActive ? "#0039A6" : "#bbb",
-          marginLeft: 2,
+          padding: "6px 10px",
+          border: "1px solid #ccc",
+          borderRadius: 4,
+          width: 320,
+          fontSize: 14,
+        }}
+      />
+      <select
+        value={statusFilter}
+        onChange={(e) => onStatusFilter(e.target.value as HearingStatus | "all")}
+        style={{ padding: "6px 10px", border: "1px solid #ccc", borderRadius: 4, fontSize: 14 }}
+      >
+        <option value="all">All statuses</option>
+        {STATUS_ORDER.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+      <select
+        value={committeeFilter}
+        onChange={(e) => onCommitteeFilter(e.target.value)}
+        style={{
+          padding: "6px 10px",
+          border: "1px solid #ccc",
+          borderRadius: 4,
+          fontSize: 14,
+          maxWidth: 280,
         }}
       >
-        {arrow}
-      </span>
-    </th>
+        <option value="all">All committees</option>
+        {committees
+          .slice()
+          .sort((a, b) => a.committee_name.localeCompare(b.committee_name))
+          .map((c) => (
+            <option key={c.committee_id} value={c.committee_id}>
+              {c.committee_name}
+            </option>
+          ))}
+      </select>
+      {hasActive && (
+        <button
+          onClick={onClear}
+          style={{
+            padding: "6px 12px",
+            border: "1px solid #999",
+            borderRadius: 4,
+            fontSize: 13,
+            background: "white",
+            color: "#666",
+            cursor: "pointer",
+          }}
+        >
+          Clear filters
+        </button>
+      )}
+    </div>
   );
 }
 
+// ---------------------------------------------------------------------
+// Bulk-action toolbar
+// ---------------------------------------------------------------------
+
+function BulkToolbar({
+  selected,
+  bulkConfirming,
+  bulkRunning,
+  onClear,
+  onBulkAction,
+  onBulkConfirm,
+  onBulkCancel,
+}: {
+  selected: Set<string>;
+  bulkConfirming: BulkAction | null;
+  bulkRunning: boolean;
+  onClear: () => void;
+  onBulkAction: (a: BulkAction) => void;
+  onBulkConfirm: (a: BulkAction) => void;
+  onBulkCancel: () => void;
+}) {
+  if (selected.size === 0) return null;
+  const danger = bulkConfirming === "rerun";
+  if (bulkConfirming) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: 10,
+          background: danger ? "#fdf3f3" : "#f0f7ff",
+          border: `1px solid ${danger ? "#c44" : "#5b8def"}`,
+          borderRadius: 4,
+          marginBottom: 12,
+          fontSize: 13,
+        }}
+      >
+        <span style={{ flex: 1, color: "#333" }}>
+          {bulkConfirming === "process"
+            ? `Submit Phase B for ${selected.size} hearing${selected.size === 1 ? "" : "s"}?`
+            : `Wipe Phase B blobs and re-run ${selected.size} hearing${selected.size === 1 ? "" : "s"}? Phase A preserved.`}
+        </span>
+        <SmallButton
+          label={bulkRunning ? "Running…" : "Confirm"}
+          onClick={() => !bulkRunning && onBulkConfirm(bulkConfirming)}
+          danger={danger}
+          disabled={bulkRunning}
+        />
+        <SmallButton label="Cancel" onClick={onBulkCancel} ghost disabled={bulkRunning} />
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: 10,
+        background: "#fafafa",
+        border: "1px solid #ddd",
+        borderRadius: 4,
+        marginBottom: 12,
+        fontSize: 13,
+      }}
+    >
+      <span style={{ flex: 1, color: "#333", fontWeight: 500 }}>
+        {selected.size} selected
+      </span>
+      <SmallButton label="Process selected" onClick={() => onBulkAction("process")} />
+      <SmallButton
+        label="Re-run B selected"
+        onClick={() => onBulkAction("rerun")}
+        danger
+      />
+      <SmallButton label="Clear" onClick={onClear} ghost />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Row
+// ---------------------------------------------------------------------
+
 interface RowProps {
   h: HearingListItem;
-  onResolve: (id: string) => void;
-  onPrep: (id: string) => void;
-  onPrepWithUrl: (id: string) => void;
-  onProcess: (id: string) => void;
-  onRerun: (id: string) => void;
+  isSelected: boolean;
+  onToggleSelect: () => void;
+  confirmingAction: RowConfirmAction | null;
+  onRequestConfirm: (action: RowConfirmAction) => void;
+  onCancelConfirm: () => void;
+  onResolve: () => void;
+  onPrep: () => void;
+  onPrepWithUrl: (url: string) => void;
+  onProcess: () => void;
+  onRerun: () => void;
   onToggleState: () => void;
   isStateOpen: boolean;
 }
 
 function Row({
   h,
+  isSelected,
+  onToggleSelect,
+  confirmingAction,
+  onRequestConfirm,
+  onCancelConfirm,
   onResolve,
   onPrep,
   onPrepWithUrl,
@@ -487,7 +617,20 @@ function Row({
 }: RowProps) {
   return (
     <>
-      <tr style={{ borderBottom: "1px solid #eee" }}>
+      <tr
+        style={{
+          borderBottom: "1px solid #eee",
+          background: isSelected ? "#f0f7ff" : "transparent",
+        }}
+      >
+        <td style={{ padding: "6px" }}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            aria-label={`Select ${h.event_id}`}
+          />
+        </td>
         <td style={{ padding: "6px" }}>
           <StatusPill status={h.status} />
         </td>
@@ -518,21 +661,31 @@ function Row({
           {h.event_id}
         </td>
         <td style={{ padding: "6px", whiteSpace: "nowrap" }}>
-          <ActionButtons
-            status={h.status}
-            onResolve={() => onResolve(h.event_id)}
-            onPrep={() => onPrep(h.event_id)}
-            onPrepWithUrl={() => onPrepWithUrl(h.event_id)}
-            onProcess={() => onProcess(h.event_id)}
-            onRerun={() => onRerun(h.event_id)}
-            onToggleState={onToggleState}
-            isStateOpen={isStateOpen}
-          />
+          {confirmingAction ? (
+            <InlineConfirm
+              action={confirmingAction}
+              onProcess={onProcess}
+              onRerun={onRerun}
+              onPrepWithUrl={onPrepWithUrl}
+              onCancel={onCancelConfirm}
+            />
+          ) : (
+            <ActionButtons
+              status={h.status}
+              onResolve={onResolve}
+              onPrep={onPrep}
+              onPrepWithUrl={() => onRequestConfirm("url")}
+              onProcess={() => onRequestConfirm("process")}
+              onRerun={() => onRequestConfirm("rerun")}
+              onToggleState={onToggleState}
+              isStateOpen={isStateOpen}
+            />
+          )}
         </td>
       </tr>
       {isStateOpen && (
         <tr>
-          <td colSpan={6} style={{ padding: 0, background: "#f6f7f9" }}>
+          <td colSpan={7} style={{ padding: 0, background: "#f6f7f9" }}>
             <StatePanel eventId={h.event_id} />
           </td>
         </tr>
@@ -540,6 +693,102 @@ function Row({
     </>
   );
 }
+
+// ---------------------------------------------------------------------
+// Inline confirmation row (replaces window.confirm/prompt)
+// ---------------------------------------------------------------------
+
+function InlineConfirm({
+  action,
+  onProcess,
+  onRerun,
+  onPrepWithUrl,
+  onCancel,
+}: {
+  action: RowConfirmAction;
+  onProcess: () => void;
+  onRerun: () => void;
+  onPrepWithUrl: (url: string) => void;
+  onCancel: () => void;
+}) {
+  const [urlValue, setUrlValue] = useState("");
+  const danger = action === "rerun";
+  const bg = danger ? "#fdf3f3" : "#f0f7ff";
+  const border = danger ? "#c44" : "#5b8def";
+
+  if (action === "url") {
+    return (
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 6px",
+          background: bg,
+          border: `1px solid ${border}`,
+          borderRadius: 3,
+        }}
+      >
+        <input
+          type="text"
+          value={urlValue}
+          onChange={(e) => setUrlValue(e.target.value)}
+          placeholder="https://..."
+          autoFocus
+          style={{
+            width: 240,
+            padding: "3px 6px",
+            border: "1px solid #ccc",
+            borderRadius: 3,
+            fontSize: 12,
+            fontFamily: "IBM Plex Mono, monospace",
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && urlValue.trim()) onPrepWithUrl(urlValue.trim());
+            if (e.key === "Escape") onCancel();
+          }}
+        />
+        <SmallButton
+          label="Submit"
+          onClick={() => urlValue.trim() && onPrepWithUrl(urlValue.trim())}
+        />
+        <SmallButton label="Cancel" onClick={onCancel} ghost />
+      </div>
+    );
+  }
+
+  const prompt =
+    action === "process"
+      ? "Submit Phase B?"
+      : "Wipe Phase B blobs and re-run? (transcript preserved)";
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 8px",
+        background: bg,
+        border: `1px solid ${border}`,
+        borderRadius: 3,
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: "#333" }}>{prompt}</span>
+      <SmallButton
+        label="Confirm"
+        onClick={action === "process" ? onProcess : onRerun}
+        danger={danger}
+      />
+      <SmallButton label="Cancel" onClick={onCancel} ghost />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Action buttons (idle row state)
+// ---------------------------------------------------------------------
 
 function ActionButtons({
   status,
@@ -560,10 +809,6 @@ function ActionButtons({
   onToggleState: () => void;
   isStateOpen: boolean;
 }) {
-  // Show ALL buttons regardless of state — admin should be able to
-  // force any action. Visual emphasis (filled vs outlined) signals
-  // which action is the "expected" next step for the hearing's
-  // current status.
   const expectedAction: "resolve" | "prep" | "process" | "rerun" | "none" =
     status === "detected"
       ? "resolve"
@@ -580,7 +825,7 @@ function ActionButtons({
     onClick: () => void,
     isExpected: boolean,
     danger = false,
-  ): React.ReactElement => (
+  ) => (
     <button
       onClick={onClick}
       style={{
@@ -625,6 +870,82 @@ function ActionButtons({
   );
 }
 
+// ---------------------------------------------------------------------
+// Small shared bits
+// ---------------------------------------------------------------------
+
+function SmallButton({
+  label,
+  onClick,
+  danger,
+  ghost,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  ghost?: boolean;
+  disabled?: boolean;
+}) {
+  const color = danger ? "#c44" : "#0039A6";
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: "3px 8px",
+        fontSize: 12,
+        border: `1px solid ${ghost ? "#999" : color}`,
+        borderRadius: 3,
+        background: ghost ? "white" : color,
+        color: ghost ? "#666" : "white",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SortableTh({
+  column,
+  sort,
+  onSort,
+  children,
+}: {
+  column: SortColumn;
+  sort: SortState;
+  onSort: (col: SortColumn) => void;
+  children: React.ReactNode;
+}) {
+  const isActive = sort.column === column;
+  const arrow = !isActive ? "↕" : sort.direction === "asc" ? "↑" : "↓";
+  return (
+    <th
+      style={{
+        padding: "8px 6px",
+        cursor: "pointer",
+        userSelect: "none",
+        color: isActive ? "#0039A6" : "#333",
+      }}
+      onClick={() => onSort(column)}
+    >
+      {children}{" "}
+      <span
+        style={{
+          fontSize: 11,
+          color: isActive ? "#0039A6" : "#bbb",
+          marginLeft: 2,
+        }}
+      >
+        {arrow}
+      </span>
+    </th>
+  );
+}
+
 function StatusPill({ status }: { status: HearingStatus }) {
   return (
     <span
@@ -649,22 +970,18 @@ function StatePanel({ eventId }: { eventId: string }) {
   const { data, isLoading, error } = useQuery<AdminHearingState>({
     queryKey: ["admin-hearing-state", eventId],
     queryFn: () => adminFetchHearingState(eventId),
-    refetchInterval: 5_000, // refresh while a job runs
+    refetchInterval: 5_000,
   });
 
-  if (isLoading) {
+  if (isLoading)
     return <div style={{ padding: 12, color: "#666" }}>Loading state…</div>;
-  }
-  if (error) {
+  if (error)
     return (
       <div style={{ padding: 12, color: "#c44" }}>
         Error: {error instanceof Error ? error.message : String(error)}
       </div>
     );
-  }
-  if (!data) {
-    return <div style={{ padding: 12, color: "#666" }}>No data.</div>;
-  }
+  if (!data) return <div style={{ padding: 12, color: "#666" }}>No data.</div>;
 
   return (
     <div style={{ padding: 12 }}>
