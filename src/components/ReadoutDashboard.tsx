@@ -1162,6 +1162,21 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
     !thisWeekIds.has(h.event_id) && !upcomingIds.has(h.event_id) && !recentIds.has(h.event_id)
   );
 
+  // ML-544: When the above-the-fold buckets (This Week + Upcoming) are empty
+  // (recess, quiet weeks), show the 10 most recent hearings so the page isn't
+  // blank. Driven by data, not hardcoded dates.
+  const aboveFoldEmpty = thisWeek.length === 0 && upcoming.length === 0;
+  const mostRecent = aboveFoldEmpty
+    ? [...hearings]
+        .sort((a, b) => new Date(b.hearing_date).getTime() - new Date(a.hearing_date).getTime())
+        .slice(0, 10)
+    : [];
+  const mostRecentIds = new Set(mostRecent.map((h) => h.event_id));
+  // When mostRecent is showing, exclude those hearings from Recent and Older
+  // to avoid duplication.
+  const recentFiltered = aboveFoldEmpty ? recent.filter((h) => !mostRecentIds.has(h.event_id)) : recent;
+  const olderFiltered = aboveFoldEmpty ? older.filter((h) => !mostRecentIds.has(h.event_id)) : older;
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       <style>{GLOBAL_STYLES}</style>
@@ -1482,6 +1497,13 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
           </div>
         ) : (<>
 
+        {/* ML-544: Most Recent fallback — shown when This Week + Upcoming are empty (recess, quiet weeks) */}
+        {aboveFoldEmpty && mostRecent.length > 0 && (
+          <Accordion label="Most Recent Hearings" count={mostRecent.length} color="#0039A6" defaultOpen>
+            <CardCarousel items={mostRecent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
+          </Accordion>
+        )}
+
         {/* This Week's Hearings — primary focus, top of page (starts expanded) */}
         {thisWeek.length > 0 && (
           <Accordion label="This Week's Hearings" count={thisWeek.length} color="#4A90C2" defaultOpen>
@@ -1497,16 +1519,16 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
         )}
 
         {/* Recent — hearings from the past ~30 days (ML-482: chronological, not status-gated) */}
-        {recent.length > 0 && (
-          <Accordion label="Recent" count={recent.length} color="#5a8a5d" defaultOpen>
-            <CardCarousel items={recent} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
+        {recentFiltered.length > 0 && (
+          <Accordion label="Recent" count={recentFiltered.length} color="#5a8a5d" defaultOpen>
+            <CardCarousel items={recentFiltered} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
 
         {/* Older — hearings older than 30 days */}
-        {older.length > 0 && (
-          <Accordion label="Older" count={older.length} color="#555">
-            <CardCarousel items={older} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
+        {olderFiltered.length > 0 && (
+          <Accordion label="Older" count={olderFiltered.length} color="#555">
+            <CardCarousel items={olderFiltered} flippedId={flippedId} onFlip={setFlippedId} onOpenMemo={setMemoHearingId} onOpenTranscript={setTranscriptHearingId} perPage={8} savedIds={savedIds} onToggleFlag={toggleFlag} matchKeywords={matchKeywords} keywordCounts={keywordCountsMap} />
           </Accordion>
         )}
 
