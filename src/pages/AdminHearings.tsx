@@ -18,6 +18,7 @@
  */
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AdminPills } from "../components/AdminPills";
 import {
   adminFetchHearingState,
   adminForcePrep,
@@ -279,16 +280,18 @@ export function AdminHearings() {
   const stillLoading = total < totalPages;
 
   return (
-    <div
-      style={{
-        padding: 24,
-        fontFamily: "Inter, sans-serif",
-        maxWidth: 1600,
-        margin: "0 auto",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
-        <h1 style={{ margin: 0 }}>Admin · Hearings</h1>
+    <>
+      <AdminPills current="readout" />
+      <div
+        style={{
+          padding: 24,
+          fontFamily: "Inter, sans-serif",
+          maxWidth: 1600,
+          margin: "0 auto",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
+          <h1 style={{ margin: 0 }}>Admin · Hearings</h1>
         <span style={{ color: "#666" }}>
           Showing {filtered.length} of {total}
           {stillLoading && totalPages > total && ` (loading ${totalPages}…)`}
@@ -397,6 +400,7 @@ export function AdminHearings() {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
