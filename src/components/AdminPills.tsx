@@ -17,7 +17,7 @@ interface Pill {
 const PILLS: Pill[] = [
   { id: "overture", label: "Overture", href: "https://admin.meridianlogic.ai/admin" },
   { id: "dossier", label: "Dossier", href: "https://dossier.meridianlogic.ai/admin" },
-  { id: "readout", label: "Readout", href: "https://readout-dashboard.vercel.app" },
+  { id: "readout", label: "Readout", href: "https://readout.meridianlogic.ai/admin/hearings" },
 ];
 
 const baseLink: React.CSSProperties = {
