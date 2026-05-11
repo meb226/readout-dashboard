@@ -26,6 +26,7 @@ import {
   adminRerunPhaseB,
   fetchCommittees,
   fetchHearings,
+  fetchProcessingStatus,
   type AdminActionResponse,
   type AdminHearingState,
   type AdminResolveResponse,
@@ -674,6 +675,13 @@ function Row({
               onPrepWithUrl={onPrepWithUrl}
               onCancel={onCancelConfirm}
             />
+          ) : h.status === "preparing" || h.status === "processing" ? (
+            <RowProgress
+              eventId={h.event_id}
+              status={h.status}
+              onToggleState={onToggleState}
+              isStateOpen={isStateOpen}
+            />
           ) : (
             <ActionButtons
               status={h.status}
@@ -825,25 +833,56 @@ function ActionButtons({
             ? "rerun"
             : "none";
 
+  // Gate forward buttons by status. Prevents accidentally clicking
+  // "Transcribe" on a DETECTED hearing (which the backend 409s anyway).
+  // Use my URL and Inspect stay always-enabled — those have legitimate
+  // out-of-order uses (manual override + read-only debugging).
+  const isTerminal = status === "postponed" || status === "canceled";
+  const noUrlYet = status === "detected";
+  const noTranscriptYet = status === "detected" || status === "resolved";
+  const noBriefYet =
+    status === "detected" || status === "resolved" || status === "ready";
+
+  const resolveDisabled = isTerminal;
+  const prepDisabled = noUrlYet || isTerminal;
+  const processDisabled = noTranscriptYet || isTerminal;
+  // Remake regenerates Phase B against an existing transcript — Phase A
+  // must be complete (so: ready, complete, or failed).
+  const rerunDisabled = noBriefYet || isTerminal;
+
   const btn = (
     label: string,
     onClick: () => void,
     isExpected: boolean,
     tooltip: string,
     danger = false,
+    disabled = false,
   ) => (
     <button
-      onClick={onClick}
-      title={tooltip}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={disabled ? `${tooltip} (not available in ${status} state)` : tooltip}
       style={{
         marginRight: 4,
         padding: "3px 8px",
         fontSize: 12,
-        border: `1px solid ${danger ? "#c44" : "#0039A6"}`,
+        border: `1px solid ${disabled ? "#ccc" : danger ? "#c44" : "#0039A6"}`,
         borderRadius: 3,
-        background: isExpected ? (danger ? "#c44" : "#0039A6") : "white",
-        color: isExpected ? "white" : danger ? "#c44" : "#0039A6",
-        cursor: "pointer",
+        background: disabled
+          ? "#f5f5f5"
+          : isExpected
+            ? danger
+              ? "#c44"
+              : "#0039A6"
+            : "white",
+        color: disabled
+          ? "#aaa"
+          : isExpected
+            ? "white"
+            : danger
+              ? "#c44"
+              : "#0039A6",
+        cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: "Inter, sans-serif",
       }}
     >
@@ -858,18 +897,24 @@ function ActionButtons({
         onResolve,
         expectedAction === "resolve",
         "Look up the video URL on Congress.gov / YouTube / Senate ISVP. Use this on hearings where we know the meeting exists but haven't found the recording yet.",
+        false,
+        resolveDisabled,
       )}
       {btn(
         "Transcribe",
         onPrep,
         expectedAction === "prep",
         "Download the audio, run it through Deepgram, identify speakers. Needs a video URL already in place.",
+        false,
+        prepDisabled,
       )}
       {btn(
         "Make brief",
         onProcess,
         expectedAction === "process",
         "Generate the memo, audio brief, podcast, and audiogram. Needs the transcript done.",
+        false,
+        processDisabled,
       )}
       {btn(
         "Remake",
@@ -877,6 +922,7 @@ function ActionButtons({
         expectedAction === "rerun",
         "Wipe the brief outputs (memo, audio, video, podcast) and regenerate. The transcript is preserved.",
         true,
+        rerunDisabled,
       )}
       <span
         style={{
@@ -912,6 +958,113 @@ function ActionButtons({
         {isStateOpen ? "Hide" : "Inspect"}
       </button>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Row progress — replaces ActionButtons while Phase A / Phase B running
+// ---------------------------------------------------------------------
+
+function RowProgress({
+  eventId,
+  status,
+  onToggleState,
+  isStateOpen,
+}: {
+  eventId: string;
+  status: HearingStatus;
+  onToggleState: () => void;
+  isStateOpen: boolean;
+}) {
+  // Poll /api/hearings/{event_id}/status every 2.5s while job is live.
+  // Same hook the regular dashboard uses for the user-facing progress bar.
+  const { data, isLoading } = useQuery({
+    queryKey: ["processing-status", eventId],
+    queryFn: () => fetchProcessingStatus(eventId),
+    refetchInterval: 2500,
+    staleTime: 0,
+  });
+
+  const phaseLabel = status === "preparing" ? "Transcribing" : "Making brief";
+  const stage = data?.current_stage ?? null;
+  const pct = data?.progress_percent ?? 0;
+  const startedAt = data?.started_at ?? null;
+
+  // Elapsed time — re-render each poll so the clock updates.
+  let elapsed = "";
+  if (startedAt) {
+    const ms = Date.now() - new Date(startedAt).getTime();
+    if (ms > 0 && Number.isFinite(ms)) {
+      const totalSec = Math.floor(ms / 1000);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      elapsed = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        minWidth: 360,
+      }}
+    >
+      <div style={{ flex: 1, maxWidth: 220 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "#666",
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 2,
+          }}
+        >
+          <span>
+            {phaseLabel}
+            {stage && stage !== "queued" ? ` · ${stage}` : ""}
+          </span>
+          <span style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+            {isLoading ? "…" : `${pct}%`}
+            {elapsed ? ` · ${elapsed}` : ""}
+          </span>
+        </div>
+        <div
+          style={{
+            height: 4,
+            background: "#eee",
+            borderRadius: 2,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${Math.max(2, Math.min(100, pct))}%`,
+              background: "#7B5EA7",
+              transition: "width 0.6s ease",
+            }}
+          />
+        </div>
+      </div>
+      <button
+        onClick={onToggleState}
+        title="Show the raw state JSON for debugging: hearing row, video resolution, job records, manifest stages."
+        style={{
+          padding: "3px 8px",
+          fontSize: 12,
+          border: "1px solid #999",
+          borderRadius: 3,
+          background: isStateOpen ? "#333" : "white",
+          color: isStateOpen ? "white" : "#666",
+          cursor: "pointer",
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        {isStateOpen ? "Hide" : "Inspect"}
+      </button>
+    </div>
   );
 }
 
