@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { Routes, Route, Link } from "react-router-dom";
 import { ReadoutDashboard } from "./components/ReadoutDashboard";
+import { AdminPills } from "./components/AdminPills";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
 import { Login } from "./pages/Login";
@@ -32,14 +33,17 @@ function AdminIndex() {
   // be replaced by a sidebar layout. For now it lists the admin views
   // that exist.
   return (
-    <div style={{ padding: 32, fontFamily: "Inter, sans-serif" }}>
-      <h1>Admin</h1>
-      <ul style={{ lineHeight: 1.8 }}>
-        <li>
-          <Link to="/admin/hearings">Hearings — force-run any pipeline stage</Link>
-        </li>
-      </ul>
-    </div>
+    <>
+      <AdminPills current="readout" />
+      <div style={{ padding: 32, fontFamily: "Inter, sans-serif" }}>
+        <h1>Admin</h1>
+        <ul style={{ lineHeight: 1.8 }}>
+          <li>
+            <Link to="/admin/hearings">Hearings — force-run any pipeline stage</Link>
+          </li>
+        </ul>
+      </div>
+    </>
   );
 }
 
