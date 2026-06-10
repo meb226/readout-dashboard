@@ -16,6 +16,7 @@ import { RequireAdmin } from "./auth/RequireAdmin";
 import { Login } from "./pages/Login";
 import { NoAccess } from "./pages/NoAccess";
 import { CommitteeSettings } from "./pages/CommitteeSettings";
+import { ClientSettings } from "./pages/ClientSettings";
 import { AdminHearings } from "./pages/AdminHearings";
 
 function Dashboard() {
@@ -73,6 +74,15 @@ export default function App() {
         element={
           <RequireAuth>
             <CommitteeSettings />
+          </RequireAuth>
+        }
+      />
+      {/* ML-63: client relevance profiles (LDA-driven memo lens) */}
+      <Route
+        path="/settings/clients"
+        element={
+          <RequireAuth>
+            <ClientSettings />
           </RequireAuth>
         }
       />

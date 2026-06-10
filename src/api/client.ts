@@ -26,6 +26,10 @@ import type {
   UnsubscribeResponse,
   SubscribeOrPaymentRequired,
   BillingSummary,
+  LdaSearchResponse,
+  ClientsResponse,
+  ClientProfile,
+  AnnotationsResponse,
 } from "../types/api";
 
 const API_BASE = "";
@@ -255,6 +259,83 @@ export interface SyncAfterCheckoutResponse {
 
 export async function syncAfterCheckout(): Promise<SyncAfterCheckoutResponse> {
   return apiFetch("/api/billing/sync-after-checkout", { method: "POST" });
+}
+
+// --- Client relevance profiles (ML-63) ---
+
+// Preview an LDA search before saving a profile. SLOW (~5-20s) — the
+// backend pages through the Senate LDA API live. 502 if LDA is down.
+export async function ldaSearch(params: {
+  registrant_name: string;
+  search_type: "registrant" | "client";
+  years?: number[];
+}): Promise<LdaSearchResponse> {
+  return apiFetch("/api/clients/lda-search", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function fetchClients(): Promise<ClientsResponse> {
+  return apiFetch("/api/clients");
+}
+
+// 422 if the LDA search behind the save finds no activity — the
+// settings page surfaces that inline rather than as a toast.
+export async function createClient(body: {
+  display_name: string;
+  registrant_name: string;
+  search_type: "registrant" | "client";
+  selected_issue_codes: string[];
+}): Promise<ClientProfile> {
+  return apiFetch("/api/clients", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateClient(
+  id: number,
+  body: { display_name?: string; selected_issue_codes?: string[] },
+): Promise<ClientProfile> {
+  return apiFetch(`/api/clients/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+// Re-runs the LDA search server-side and refreshes the stored clusters.
+export async function refreshClient(id: number): Promise<ClientProfile> {
+  return apiFetch(`/api/clients/${id}/refresh`, { method: "POST" });
+}
+
+export async function deleteClient(id: number): Promise<{ deleted: boolean }> {
+  return apiFetch(`/api/clients/${id}`, { method: "DELETE" });
+}
+
+// --- Client relevance annotations (ML-63) ---
+
+// 409 if the hearing has no memo yet (Phase B hasn't run).
+export async function fetchAnnotations(
+  eventId: string,
+  profileId: number,
+): Promise<AnnotationsResponse> {
+  return apiFetch(`/api/hearings/${eventId}/annotations/${profileId}`);
+}
+
+// VERY SLOW (20-60s) — synchronous Opus call server-side. Callers use
+// a long-lived mutation with an explicit in-progress message rather
+// than a spinner that looks hung. `force` regenerates over a cached
+// (possibly stale) result.
+export async function generateAnnotations(
+  eventId: string,
+  profileId: number,
+  force = false,
+): Promise<AnnotationsResponse> {
+  return apiFetch(
+    `/api/hearings/${eventId}/annotations/${profileId}?force=${force ? "true" : "false"}`,
+    { method: "POST" },
+  );
 }
 
 // --- Admin hearing force-run (ML-535) ---

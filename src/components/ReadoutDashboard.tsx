@@ -19,7 +19,7 @@ import { StatusBadge } from "./StatusBadge";
 import { ProcessButton } from "./ProcessButton";
 import { artifactUrl, fetchMemo, toggleHearingFlag } from "../api/client";
 import { downloadMemoAsDocx } from "../utils/memoToDocx";
-import { MemoViewer } from "./MemoViewer";
+import { MemoViewer, type MemoLens } from "./MemoViewer";
 import { TranscriptViewer } from "./TranscriptViewer";
 import { TranscriptSearch } from "./TranscriptSearch";
 import { useTranscriptSearch } from "../hooks/useTranscriptSearch";
@@ -811,6 +811,13 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
   const c = cid(hearing.committee_id);
   const [audioError, setAudioError] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  // ML-63: the MemoViewer reports its active client lens up here so the
+  // header's download button can offer "Include client notes". null =
+  // generic view or no generated notes.
+  const [lens, setLens] = useState<MemoLens | null>(null);
+  const [includeNotes, setIncludeNotes] = useState(false);
+  // Stable callback — MemoViewer's effect depends on its identity.
+  const handleLensChange = useCallback((l: MemoLens | null) => setLens(l), []);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -899,12 +906,31 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
               <span className="text-xs text-[#666]">{formatDate(hearing.hearing_date)}</span>
             </div>
             <div className="flex items-center gap-2">
+              {/* ML-63: only offered when a client lens is active AND
+                  generated notes exist for this hearing. */}
+              {lens && (
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-[#444] cursor-pointer select-none mr-1">
+                  <input
+                    type="checkbox"
+                    checked={includeNotes}
+                    onChange={(e) => setIncludeNotes(e.target.checked)}
+                    className="accent-[#0039A6]"
+                  />
+                  Include client notes
+                </label>
+              )}
               <button
                 onClick={async () => {
                   try {
                     const content = await fetchMemo(hearing.event_id);
                     const filename = `${hearing.committee_id}_${hearing.hearing_date}_memo.docx`;
-                    await downloadMemoAsDocx(content, filename);
+                    // ML-63: append the client-notes section only when the
+                    // lens is active and the box is checked.
+                    await downloadMemoAsDocx(
+                      content,
+                      filename,
+                      includeNotes && lens ? lens : undefined,
+                    );
                   } catch (e) {
                     console.error("Download failed:", e);
                   }
@@ -926,7 +952,7 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
 
           {/* Memo content — scrollable */}
           <div className="flex-1 overflow-y-auto px-10 py-8">
-            <MemoViewer eventId={hearing.event_id} />
+            <MemoViewer eventId={hearing.event_id} onLensChange={handleLensChange} />
           </div>
         </div>
       </div>
@@ -1242,6 +1268,15 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
                 title="Manage committee subscriptions"
               >
                 Committees
+              </Link>
+              {/* ML-63: client relevance profiles */}
+              <Link
+                to="/settings/clients"
+                className="px-3 py-1 text-sm font-semibold rounded-lg transition-all duration-200"
+                style={{ color: "#444" }}
+                title="Manage client profiles for memo client-lens notes"
+              >
+                Clients
               </Link>
             </div>
           </div>

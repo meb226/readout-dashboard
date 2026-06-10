@@ -20,6 +20,13 @@ import {
   ShadingType,
 } from "docx";
 import { saveAs } from "file-saver";
+import type { RelevanceAnnotation } from "../types/api";
+
+/** ML-63: optional client-notes appendix for the Word export. */
+export interface ClientNotesForDocx {
+  clientName: string;
+  annotations: RelevanceAnnotation[];
+}
 
 /* ── Inline formatting ─────────────────────────────────────────── */
 
@@ -88,7 +95,17 @@ function parseTable(lines: string[]): Table {
 
 /* ── Main converter ────────────────────────────────────────────── */
 
-export async function downloadMemoAsDocx(markdown: string, filename: string) {
+/**
+ * ML-63: `clientNotes` is optional — when present, a "CLIENT RELEVANCE
+ * NOTES" section is appended after the memo body (numbered entries,
+ * bold section label + blurb). Omitting it produces the exact same
+ * document as before, so generic downloads are untouched.
+ */
+export async function downloadMemoAsDocx(
+  markdown: string,
+  filename: string,
+  clientNotes?: ClientNotesForDocx,
+) {
   const lines = markdown.split("\n");
   const children: (Paragraph | Table)[] = [];
 
@@ -215,6 +232,52 @@ export async function downloadMemoAsDocx(markdown: string, filename: string) {
       })
     );
     i++;
+  }
+
+  // ML-63: appended client-notes section. Entries are numbered to
+  // match the in-app footnote chips: "1. SECTION LABEL" then the blurb.
+  if (clientNotes && clientNotes.annotations.length > 0) {
+    // Divider before the section so it reads as an appendix.
+    children.push(
+      new Paragraph({
+        border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC", space: 1 } },
+        spacing: { before: 360, after: 240 },
+      })
+    );
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `CLIENT RELEVANCE NOTES — ${clientNotes.clientName}`,
+            font: "Inter",
+            size: 24,
+            bold: true,
+            color: "0039A6",
+          }),
+        ],
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 0, after: 160 },
+      })
+    );
+    clientNotes.annotations.forEach((note, idx) => {
+      // "1. Notable Exchanges" — number + bold section label.
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: `${idx + 1}. `, font: "Inter", size: 22, bold: true }),
+            new TextRun({ text: note.section, font: "Inter", size: 22, bold: true }),
+          ],
+          spacing: { before: 160, after: 40 },
+        })
+      );
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: note.blurb, font: "Lora", size: 22 })],
+          indent: { left: 280 },
+          spacing: { before: 0, after: 120 },
+        })
+      );
+    });
   }
 
   const doc = new Document({

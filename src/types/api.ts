@@ -243,6 +243,78 @@ export interface BillingSummary {
   has_base_subscription: boolean;
 }
 
+// ML-63: Client relevance overlay
+//
+// A "client profile" is a saved LDA (Lobbying Disclosure Act) search —
+// the firm or client org a lobbyist works for — plus which of its
+// lobbying issue areas ("clusters") the user wants memos screened
+// against. Annotations are short Opus-written notes pinned to memo
+// passages explaining why that passage matters to the client.
+
+/** One LDA issue area (e.g. "BAN — Banking") with supporting evidence. */
+export interface IssueCluster {
+  issue_code: string;
+  issue_name: string;
+  filing_count: number;
+  bills: string[];
+  descriptions: string[];
+  government_entities: string[];
+  lobbyists: string[];
+}
+
+export interface ClientProfile {
+  id: number;
+  workos_user_id: string;
+  display_name: string;
+  registrant_name: string;
+  search_type: "registrant" | "client";
+  /** Which clusters the user left active — drives annotation relevance. */
+  selected_issue_codes: string[];
+  clusters: IssueCluster[];
+  last_refreshed: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One client note pinned to a memo passage. */
+export interface RelevanceAnnotation {
+  /** Memo section heading the note belongs under (e.g. "Notable Exchanges"). */
+  section: string;
+  /** Verbatim memo excerpt the note is anchored to. */
+  anchor_quote: string;
+  /** The "why this matters to your client" text. */
+  blurb: string;
+}
+
+/** POST /api/clients/lda-search — preview of clusters before saving. */
+export interface LdaSearchResponse {
+  registrant_name: string;
+  search_type: "registrant" | "client";
+  years: number[];
+  filing_count: number;
+  clusters: IssueCluster[];
+}
+
+export interface ClientsResponse {
+  clients: ClientProfile[];
+}
+
+/**
+ * GET/POST /api/hearings/{event_id}/annotations/{profile_id}.
+ * `status: "not_generated"` means no Opus run has happened yet for this
+ * (hearing, profile) pair. `stale: true` means the profile's clusters
+ * changed after the notes were generated.
+ */
+export interface AnnotationsResponse {
+  status: "ready" | "not_generated";
+  stale?: boolean;
+  annotations: RelevanceAnnotation[];
+  client_display_name?: string;
+  generated_at?: string;
+  /** POST only: true when the server returned an existing result. */
+  cached?: boolean;
+}
+
 export interface UnsubscribeResponse {
   unsubscribed: boolean;
   committee_id: string;
