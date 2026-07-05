@@ -134,10 +134,14 @@ export function HearingDetail({ eventId, onClose }: HearingDetailProps) {
             label="Audio Brief (~2 min)"
           />
 
-          <AudioPlayer
-            src={artifactUrl(eventId, "briefs/generic/podcast_episode.mp3")}
-            label="Podcast Episode (~5-8 min)"
-          />
+          {/* ML-320: podcast is studio-triggered now, not a Phase B default —
+              only render the player when an episode actually exists */}
+          {hearing.has_podcast && (
+            <AudioPlayer
+              src={artifactUrl(eventId, "briefs/generic/podcast_episode.mp3")}
+              label="Podcast Episode (~5-8 min)"
+            />
+          )}
 
           <a
             href={artifactUrl(eventId, "video_highlights.mp4")}
