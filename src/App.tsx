@@ -18,6 +18,7 @@ import { NoAccess } from "./pages/NoAccess";
 import { CommitteeSettings } from "./pages/CommitteeSettings";
 import { ClientSettings } from "./pages/ClientSettings";
 import { AdminHearings } from "./pages/AdminHearings";
+import { AdminStudio } from "./pages/AdminStudio";
 
 function Dashboard() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -41,6 +42,9 @@ function AdminIndex() {
         <ul style={{ lineHeight: 1.8 }}>
           <li>
             <Link to="/admin/hearings">Hearings — force-run any pipeline stage</Link>
+          </li>
+          <li>
+            <Link to="/admin/studio">Studio — podcast + video: generate, preview, publish</Link>
           </li>
         </ul>
       </div>
@@ -66,6 +70,15 @@ export default function App() {
         element={
           <RequireAdmin>
             <AdminHearings />
+          </RequireAdmin>
+        }
+      />
+      {/* ML-329/330/331: Studio — podcast + video editorial surface */}
+      <Route
+        path="/admin/studio"
+        element={
+          <RequireAdmin>
+            <AdminStudio />
           </RequireAdmin>
         }
       />

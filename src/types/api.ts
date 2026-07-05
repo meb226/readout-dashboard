@@ -33,6 +33,7 @@ export interface HearingListItem {
   has_audio_brief: boolean;
   has_video: boolean;
   has_video_brief: boolean;
+  has_podcast: boolean;
   has_transcript: boolean;
   detected_at: string;
   congress_gov_url: string;
@@ -73,6 +74,7 @@ export interface HearingDetail {
   has_audio_brief: boolean;
   has_video: boolean;
   has_video_brief: boolean;
+  has_podcast: boolean;
   has_transcript: boolean;
   stages: StageDetail[];
   briefs: Record<string, unknown>;
@@ -90,6 +92,9 @@ export interface ProcessingStatus {
   error: string | null;
   started_at: string | null;
   completed_at: string | null;
+  has_audiogram?: boolean;   // ML-483
+  has_video_brief?: boolean; // ML-515
+  has_podcast?: boolean;     // ML-320
 }
 
 export interface CommitteeCount {

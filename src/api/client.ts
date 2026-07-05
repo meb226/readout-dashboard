@@ -426,3 +426,89 @@ export async function adminForceResolve(
 export async function adminFetchHearingState(eventId: string): Promise<AdminHearingState> {
   return apiFetch(`/api/admin/hearings/${eventId}/state`);
 }
+
+// ------------------------------------------------------------------
+// ML-329/ML-330/ML-331: Studio — podcast generation + publish workflow
+// ------------------------------------------------------------------
+
+export interface PodcastTriggerResponse {
+  event_id: string;
+  hearing_id: string | null;
+  job_status: string; // "queued" | "running" | "complete" | "failed" | "not_started"
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  has_podcast: boolean;
+}
+
+export interface PodcastEpisode {
+  event_id: string;
+  hearing_id: string;
+  guid: string;
+  episode_number: number | null;
+  title: string;
+  description: string | null;
+  committee_id: string;
+  hearing_date: string | null;
+  duration_seconds: number | null;
+  file_bytes: number | null;
+  is_free_episode: boolean;
+  published_at: string | null;
+  unpublished_at: string | null;
+  updated_at: string | null;
+}
+
+export interface FeedStatus {
+  feed_url: string;
+  episode_count: number;
+  published_count: number;
+  free_episode_event_id: string | null;
+  last_published_at: string | null;
+  podcast_enabled: boolean;
+  video_brief_enabled: boolean;
+  episodes: PodcastEpisode[];
+}
+
+export async function studioGeneratePodcast(eventId: string): Promise<PodcastTriggerResponse> {
+  return apiFetch(`/api/admin/studio/hearings/${eventId}/generate-podcast`, {
+    method: "POST",
+  });
+}
+
+export async function studioPodcastStatus(eventId: string): Promise<PodcastTriggerResponse> {
+  return apiFetch(`/api/admin/studio/hearings/${eventId}/podcast-status`);
+}
+
+export async function studioPublishEpisode(eventId: string): Promise<PodcastEpisode> {
+  return apiFetch(`/api/admin/studio/episodes/${eventId}/publish`, { method: "POST" });
+}
+
+export async function studioUnpublishEpisode(eventId: string): Promise<PodcastEpisode> {
+  return apiFetch(`/api/admin/studio/episodes/${eventId}/unpublish`, { method: "POST" });
+}
+
+export async function studioSetFreeEpisode(
+  eventId: string,
+  isFree: boolean,
+): Promise<PodcastEpisode> {
+  return apiFetch(`/api/admin/studio/episodes/${eventId}/free`, {
+    method: "POST",
+    body: JSON.stringify({ is_free: isFree }),
+  });
+}
+
+export async function studioFeedStatus(): Promise<FeedStatus> {
+  return apiFetch(`/api/admin/studio/feed-status`);
+}
+
+// Video brief generation reuses the ML-483/ML-515 integration endpoint —
+// require_service_or_user accepts the session cookie, and the studio page
+// itself sits behind RequireAdmin. Progress is polled via the shared
+// fetchProcessingStatus (which carries has_podcast/has_video_brief + error).
+export async function studioRegenerateVideoBrief(
+  eventId: string,
+): Promise<PodcastTriggerResponse> {
+  return apiFetch(`/api/integration/hearings/${eventId}/regenerate-video-brief`, {
+    method: "POST",
+  });
+}
