@@ -14,6 +14,9 @@ export const HearingStatus = {
   FAILED: "failed",
   POSTPONED: "postponed",
   CANCELED: "canceled",
+  // ML-649: genuinely no public recording (closed session, or a rescheduled
+  // phantom whose held twin resolved under another event id)
+  NO_BROADCAST: "no_broadcast",
 } as const;
 
 export type HearingStatus = (typeof HearingStatus)[keyof typeof HearingStatus];

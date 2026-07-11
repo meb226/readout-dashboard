@@ -10,6 +10,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   [HearingStatus.FAILED]: { label: "Failed", color: "#991B1B", bg: "#FEE2E2" },
   [HearingStatus.POSTPONED]: { label: "Postponed", color: "#6B7280", bg: "#E5E7EB" },
   [HearingStatus.CANCELED]: { label: "Canceled", color: "#6B7280", bg: "#E5E7EB" },
+  [HearingStatus.NO_BROADCAST]: { label: "No Broadcast", color: "#6B7280", bg: "#E5E7EB" },
 };
 
 export function StatusBadge({ status }: { status: HearingStatus }) {

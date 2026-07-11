@@ -19,6 +19,7 @@ import { CommitteeSettings } from "./pages/CommitteeSettings";
 import { ClientSettings } from "./pages/ClientSettings";
 import { AdminHearings } from "./pages/AdminHearings";
 import { AdminStudio } from "./pages/AdminStudio";
+import { AdminHealth } from "./pages/AdminHealth";
 
 function Dashboard() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -45,6 +46,9 @@ function AdminIndex() {
           </li>
           <li>
             <Link to="/admin/studio">Studio — podcast + video: generate, preview, publish</Link>
+          </li>
+          <li>
+            <Link to="/admin/health">Acquisition health — SLA rate, misses, per-committee reliability</Link>
           </li>
         </ul>
       </div>
@@ -79,6 +83,15 @@ export default function App() {
         element={
           <RequireAdmin>
             <AdminStudio />
+          </RequireAdmin>
+        }
+      />
+      {/* ML-649: video-acquisition reliability report */}
+      <Route
+        path="/admin/health"
+        element={
+          <RequireAdmin>
+            <AdminHealth />
           </RequireAdmin>
         }
       />

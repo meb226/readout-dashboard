@@ -428,6 +428,68 @@ export async function adminFetchHearingState(eventId: string): Promise<AdminHear
 }
 
 // ------------------------------------------------------------------
+// ML-649: Video-acquisition resolution health (admin report)
+// ------------------------------------------------------------------
+
+/** One unresolved hearing in the misses / in-flight lists. */
+export interface HealthMissItem {
+  event_id: string;
+  committee_id: string;
+  title: string;
+  date: string | null;
+  reason: string;
+  age_days: number;
+}
+
+/** One excluded-from-grading hearing in the no_broadcast list. */
+export interface HealthNoBroadcastItem {
+  event_id: string;
+  committee_id: string;
+  title: string;
+  date: string | null;
+  reason: string; // "canceled" | "postponed" | "closed_session" | "rescheduled_phantom"
+}
+
+export interface HealthCommitteeRow {
+  committee_id: string;
+  broadcast_expected: number;
+  resolved: number;
+  unresolved: number;
+  in_flight: number;
+  missed: number;
+  no_broadcast: number;
+  future: number;
+  oldest_unresolved_days: number;
+  resolution_rate: number;
+}
+
+export interface ResolutionHealth {
+  generated_at: string;
+  upload_window_days: number;
+  overall: {
+    total: number;
+    future: number;
+    no_broadcast: number;
+    broadcast_expected: number;
+    resolved: number;
+    unresolved: number;
+    in_flight: number;
+    missed: number;
+    resolution_rate: number;
+  };
+  committees: HealthCommitteeRow[];
+  unresolved_by_reason: Record<string, number>;
+  misses: HealthMissItem[];
+  in_flight: HealthMissItem[];
+  no_broadcast_by_reason: Record<string, number>;
+  no_broadcast: HealthNoBroadcastItem[];
+}
+
+export async function adminFetchResolutionHealth(): Promise<ResolutionHealth> {
+  return apiFetch(`/api/admin/resolution-health`);
+}
+
+// ------------------------------------------------------------------
 // ML-329/ML-330/ML-331: Studio — podcast generation + publish workflow
 // ------------------------------------------------------------------
 

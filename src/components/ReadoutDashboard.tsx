@@ -336,6 +336,16 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
                     </p>
                   </div>
                 )}
+                {hearing.status === HearingStatus.NO_BROADCAST && (
+                  <div>
+                    <p className="text-sm font-semibold text-[#444] mb-1">No Broadcast Available</p>
+                    <p className="text-xs text-[#666] leading-relaxed">
+                      This proceeding has no public recording — it was a closed session
+                      or was rescheduled and covered under a separate hearing record.
+                      No brief will be produced.
+                    </p>
+                  </div>
+                )}
                 {/* Hearing metadata */}
                 {(hearing.hearing_type || (hearing.meeting_status && hearing.meeting_status !== "No meeting status")) && (
                   <div className="mt-3 pt-3 flex flex-wrap gap-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>

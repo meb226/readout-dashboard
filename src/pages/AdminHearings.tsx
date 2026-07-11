@@ -61,6 +61,7 @@ const STATUS_ORDER: HearingStatus[] = [
   "detected",
   "postponed",
   "canceled",
+  "no_broadcast",
 ];
 
 const STATUS_COLORS: Record<HearingStatus, string> = {
@@ -73,6 +74,7 @@ const STATUS_COLORS: Record<HearingStatus, string> = {
   failed: "#c44",
   postponed: "#aa8800",
   canceled: "#888",
+  no_broadcast: "#888",
 };
 
 export function AdminHearings() {
