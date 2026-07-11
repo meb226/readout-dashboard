@@ -7,7 +7,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHearings } from "../hooks/useHearings";
 import { useCommittees } from "../hooks/useCommittees";
@@ -1099,6 +1099,23 @@ export function ReadoutDashboard({ onSelectHearing: _onSelectHearing, selectedEv
   const countMap = new Map<string, number>();
   // Build counts from raw data
   const allHearings = data?.hearings ?? [];
+
+  // ML-653: deep link from brief-ready emails — /?hearing={event_id} opens
+  // that hearing's memo view once the hearing list has loaded. The param is
+  // consumed (removed from the URL) either way, so closing the memo doesn't
+  // re-open it and an unknown event_id degrades to the normal dashboard.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const target = searchParams.get("hearing");
+    if (!target || allHearings.length === 0) return;
+    if (allHearings.some((h) => h.event_id === target)) {
+      setMemoHearingId(target);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("hearing");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allHearings.length]);
 
   // ML-308: Derive savedIds from server data + optimistic toggle via API
   const savedIds = useMemo(() => new Set(allHearings.filter((h) => h.auto_process).map((h) => h.event_id)), [allHearings]);
