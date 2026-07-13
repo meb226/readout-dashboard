@@ -120,12 +120,20 @@ function podcastPill(state: PodcastState, isFree: boolean) {
 function useGenerationPoll(eventId: string | null, onDone: () => void) {
   // Poll the shared /status endpoint while a generation job runs.
   // Terminal states flip has_podcast/has_video_brief, at which point
-  // the parent invalidates the hearing + feed queries.
+  // the parent invalidates the hearing + feed queries. Failures are
+  // surfaced with an alert — the job runs server-side, and e.g. a video
+  // generate on a hearing whose video was never downloaded fails fast
+  // with a message the operator needs to actually see.
   return useQuery({
     queryKey: ["studio-gen-status", eventId],
     queryFn: async () => {
       const s = await fetchProcessingStatus(eventId as string);
-      if (s.status === "complete" || s.status === "failed") onDone();
+      if (s.status === "complete" || s.status === "failed") {
+        if (s.status === "failed" && s.error) {
+          window.alert(`Generation failed for ${eventId}:\n${s.error}`);
+        }
+        onDone();
+      }
       return s;
     },
     enabled: !!eventId,
@@ -321,7 +329,7 @@ function PreviewPanel({
                   >
                     Download MP4
                   </a>
-                  <span title={videoBriefEnabled ? "Re-run script + HeyGen render + assembly (~$3-4)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}>
+                  <span title={videoBriefEnabled ? "Re-run script + HeyGen render + assembly (~3 min extended cut, ~$6-8)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}>
                     {videoBriefEnabled
                       ? confirmBtn("regen-video", "Regenerate", () => onRegen("video"), true)
                       : <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled>Regenerate</button>}
@@ -334,12 +342,24 @@ function PreviewPanel({
               </>
             ) : generating === "video" ? (
               <div style={{ fontSize: 13, color: "#7B5EA7" }}>
-                Rendering video brief — HeyGen avatar segments + assembly (~6-10 min)…
+                Rendering video brief — HeyGen avatar segments + assembly (~10-15 min for the extended cut)…
               </div>
             ) : (
               <div style={{ fontSize: 13, color: "#667" }}>
-                No video brief. Needs the hearing video downloaded (Phase B with
-                video); generation costs ~$3-4 of HeyGen render.
+                <div style={{ marginBottom: 8 }}>
+                  No video brief yet. Generation renders the ~3 min extended cut
+                  (~$6-8 of HeyGen). Requires the hearing video in storage — if it
+                  was never downloaded, the job fails fast with a clear message
+                  and you'll need a Phase B run with video download first.
+                </div>
+                <button
+                  style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
+                  disabled={!videoBriefEnabled}
+                  title={videoBriefEnabled ? "Generate the extended video brief" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+                  onClick={() => onRegen("video")}
+                >
+                  Generate video
+                </button>
               </div>
             )}
           </div>
@@ -830,11 +850,15 @@ function StudioRow({
               Generate podcast
             </button>
           )}
-          {!hearing.has_video_brief && !genKind && hearing.has_video && (
+          {/* Always offered when no brief exists — whether the hearing VIDEO
+              was downloaded isn't a cached flag (has_video is the shelved v1
+              reel, not that), so the backend checks at run time and the job
+              fails fast with a clear message when the video is missing. */}
+          {!hearing.has_video_brief && !genKind && (
             <button
               style={{ ...btnStyle, marginLeft: 6 }}
               disabled={!videoBriefEnabled}
-              title={videoBriefEnabled ? "Generate the HeyGen video brief (~$3-4, 6-10 min; needs the hearing video)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-8, 10-15 min). Needs the hearing video downloaded — fails with a clear message if it isn't." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
               onClick={() => onGenerate("video")}
             >
               Generate video
