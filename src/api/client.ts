@@ -563,14 +563,15 @@ export async function studioFeedStatus(): Promise<FeedStatus> {
   return apiFetch(`/api/admin/studio/feed-status`);
 }
 
-// Video brief generation reuses the ML-483/ML-515 integration endpoint —
-// require_service_or_user accepts the session cookie, and the studio page
-// itself sits behind RequireAdmin. Progress is polled via the shared
-// fetchProcessingStatus (which carries has_podcast/has_video_brief + error).
-export async function studioRegenerateVideoBrief(
+// Generate (or regenerate) the extended video brief from ANY pipeline
+// state — the studio endpoint chains ingest/transcribe/analyze for raw
+// hearings, then renders. Progress is polled via the shared
+// fetchProcessingStatus (which carries has_podcast/has_video_brief,
+// current_stage + error).
+export async function studioGenerateVideo(
   eventId: string,
 ): Promise<PodcastTriggerResponse> {
-  return apiFetch(`/api/integration/hearings/${eventId}/regenerate-video-brief`, {
+  return apiFetch(`/api/admin/studio/hearings/${eventId}/generate-video`, {
     method: "POST",
   });
 }
