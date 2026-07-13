@@ -575,3 +575,36 @@ export async function studioGenerateVideo(
     method: "POST",
   });
 }
+
+// ------------------------------------------------------------------
+// Manual pipeline controls — wake the poller / backfill daemons now
+// ------------------------------------------------------------------
+
+export interface PipelineStatus {
+  poller: {
+    running: boolean;
+    interval_minutes: number;
+    last_poll_at: string | null;
+    last_poll_error: string | null;
+  } | null;
+  backfill: {
+    running: boolean;
+    interval_minutes: number;
+    max_per_cycle: number;
+    last_run_at: string | null;
+    last_run_error: string | null;
+  } | null;
+  auto_processor_paused: boolean;
+}
+
+export async function adminPipelineStatus(): Promise<PipelineStatus> {
+  return apiFetch(`/api/admin/pipeline/status`);
+}
+
+export async function adminPollNow(): Promise<{ triggered: boolean; note: string }> {
+  return apiFetch(`/api/admin/pipeline/poll-now`, { method: "POST" });
+}
+
+export async function adminBackfillNow(): Promise<{ triggered: boolean; note: string }> {
+  return apiFetch(`/api/admin/pipeline/backfill-now`, { method: "POST" });
+}
