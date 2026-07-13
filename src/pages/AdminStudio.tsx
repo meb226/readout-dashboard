@@ -1,7 +1,7 @@
 /**
  * ML-329/ML-330/ML-331: Studio — the podcast + video editorial surface.
  *
- * Review Phase-B-complete hearings, generate the podcast episode or
+ * Point at ANY workable hearing (raw included), generate the podcast or
  * video brief on demand, preview/QA them inline, then publish episodes
  * to the public RSS feed. Operator tooling in the AdminHearings style:
  * flat info-dense table, inline styles, inline confirmations (no modals).
@@ -26,7 +26,7 @@ import {
   studioFeedStatus,
   studioGeneratePodcast,
   studioPublishEpisode,
-  studioRegenerateVideoBrief,
+  studioGenerateVideo,
   studioSetFreeEpisode,
   studioUnpublishEpisode,
   type FeedStatus,
@@ -112,6 +112,38 @@ function podcastPill(state: PodcastState, isFree: boolean) {
       return <Pill label="Not generated" color="#999" />;
   }
 }
+
+// Where the hearing sits in the pipeline. Raw is a fine starting point —
+// generation chains transcription + analysis automatically; this column
+// just tells the operator how much work (time + cost) a click implies.
+function pipelinePill(status: string) {
+  switch (status) {
+    case "preparing":
+      return <Pill label="Transcribing…" color="#7B5EA7" />;
+    case "processing":
+      return <Pill label="Processing…" color="#7B5EA7" />;
+    case "ready":
+      return <Pill label="Transcribed" color="#0039A6" title="Phase A done — generation adds analysis (~$0.64) before the format step" />;
+    case "complete":
+      return <Pill label="Analyzed" color="#72A375" title="Memo + clip pool exist — generation runs only the format step" />;
+    case "failed":
+      return <Pill label="Failed" color="#c44" />;
+    default:
+      return <Pill label="Raw" color="#999" title="Nothing processed yet — generation runs transcription + analysis first (~$1.05, ~15-25 min) before the format step" />;
+  }
+}
+
+// Friendly names for /status current_stage while a generation job runs.
+const STAGE_LABELS: Record<string, string> = {
+  ingest: "Downloading…",
+  transcribe: "Transcribing…",
+  resolve_speakers: "Speakers…",
+  generate_memo: "Analyzing…",
+  briefing_script: "Scripting…",
+  audio_brief: "Assembling…",
+  audiogram: "Assembling…",
+  video_brief: "Rendering…",
+};
 
 // ------------------------------------------------------------------
 // Generation poller — one per actively-generating row
@@ -210,7 +242,7 @@ function PreviewPanel({
 
   return (
     <tr>
-      <td colSpan={8} style={{ background: "#f7f9fc", padding: "16px 24px", borderBottom: "1px solid #e3e8ef" }}>
+      <td colSpan={7} style={{ background: "#f7f9fc", padding: "16px 24px", borderBottom: "1px solid #e3e8ef" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, alignItems: "start" }}>
           {/* ---- Podcast side ---- */}
           <div>
@@ -348,9 +380,8 @@ function PreviewPanel({
               <div style={{ fontSize: 13, color: "#667" }}>
                 <div style={{ marginBottom: 8 }}>
                   No video brief yet. Generation renders the ~3 min extended cut
-                  (~$6-8 of HeyGen). Requires the hearing video in storage — if it
-                  was never downloaded, the job fails fast with a clear message
-                  and you'll need a Phase B run with video download first.
+                  (~$6-8 of HeyGen) and chains any missing upstream work first —
+                  video download, transcription, analysis.
                 </div>
                 <button
                   style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
@@ -522,12 +553,16 @@ export function AdminStudio() {
       ...(page3?.hearings ?? []),
     ];
     const seen = new Set<string>();
-    // The studio only shows hearings whose Phase B artifacts exist —
-    // everything else belongs on /admin/hearings first.
+    // Content tool, not a Phase-B afterthought: show every hearing the
+    // studio can actually work from — a resolved video URL (raw is fine;
+    // generation chains transcription + analysis) or an existing
+    // transcript. Canceled/postponed rows and unresolved-no-source rows
+    // are excluded because nothing can run on them.
     return merged.filter((h) => {
       if (seen.has(h.event_id)) return false;
       seen.add(h.event_id);
-      return h.has_audio_brief;
+      if (h.status === "canceled" || h.status === "postponed") return false;
+      return Boolean(h.video_url) || h.has_transcript;
     });
   }, [page1, page2, page3]);
 
@@ -607,7 +642,7 @@ export function AdminStudio() {
   });
 
   const generateVideo = useMutation({
-    mutationFn: studioRegenerateVideoBrief,
+    mutationFn: studioGenerateVideo,
     onSuccess: (resp) => {
       setGenerating((g) => ({ ...g, [resp.event_id]: "video" }));
     },
@@ -680,7 +715,7 @@ export function AdminStudio() {
             <option value="published">Published</option>
           </select>
           <span style={{ fontSize: 12, color: "#667" }}>
-            {filtered.length} Phase-B-complete hearing{filtered.length === 1 ? "" : "s"}
+            {filtered.length} workable hearing{filtered.length === 1 ? "" : "s"}
           </span>
         </div>
 
@@ -691,8 +726,7 @@ export function AdminStudio() {
               <Th onClick={() => handleSort("hearing_date")} active={sort.column === "hearing_date"} dir={sort.direction}>Date</Th>
               <Th onClick={() => handleSort("committee_name")} active={sort.column === "committee_name"} dir={sort.direction}>Committee</Th>
               <Th onClick={() => handleSort("title")} active={sort.column === "title"} dir={sort.direction}>Title</Th>
-              <th style={thStyle}>Memo</th>
-              <th style={thStyle}>Brief</th>
+              <th style={thStyle}>State</th>
               <Th onClick={() => handleSort("podcast")} active={sort.column === "podcast"} dir={sort.direction}>Podcast</Th>
               <Th onClick={() => handleSort("video")} active={sort.column === "video"} dir={sort.direction}>Video brief</Th>
               <th style={thStyle}>Actions</th>
@@ -741,8 +775,9 @@ export function AdminStudio() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#889" }}>
-                  No Phase-B-complete hearings match. Process hearings on{" "}
+                <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#889" }}>
+                  No workable hearings match — a hearing needs a resolved video
+                  URL or an existing transcript. Resolve sources on{" "}
                   <a href="/admin/hearings">/admin/hearings</a> first.
                 </td>
               </tr>
@@ -810,6 +845,9 @@ function StudioRow({
   // Poll the shared status endpoint while this row has a job in flight.
   const poll = useGenerationPoll(genKind ? hearing.event_id : null, onGenerationDone);
   const pollError = genKind && poll.data?.status === "failed" ? poll.data?.error : null;
+  const stageLabel = genKind && poll.data?.current_stage
+    ? STAGE_LABELS[poll.data.current_stage] ?? null
+    : null;
 
   return (
     <>
@@ -824,17 +862,18 @@ function StudioRow({
         <td style={{ ...tdStyle, maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={hearing.title}>
           {hearing.title}
         </td>
-        <td style={tdStyle}>✅</td>
-        <td style={tdStyle}>{hearing.has_audio_brief ? "✅" : "—"}</td>
+        <td style={tdStyle}>{pipelinePill(hearing.status)}</td>
         <td style={tdStyle}>
-          {podcastPill(state, episode?.is_free_episode ?? false)}
+          {genKind === "podcast"
+            ? <Pill label={stageLabel ?? "Generating…"} color="#7B5EA7" />
+            : podcastPill(state, episode?.is_free_episode ?? false)}
           {pollError && genKind === "podcast" && (
             <div style={{ fontSize: 11, color: "#c44", marginTop: 2 }} title={pollError}>failed — see panel</div>
           )}
         </td>
         <td style={tdStyle}>
           {genKind === "video"
-            ? <Pill label="Rendering…" color="#7B5EA7" />
+            ? <Pill label={stageLabel ?? "Rendering…"} color="#7B5EA7" />
             : hearing.has_video_brief
               ? <Pill label="Ready" color="#0039A6" />
               : <Pill label="None" color="#999" />}
@@ -844,21 +883,20 @@ function StudioRow({
             <button
               style={{ ...btnStyle, background: podcastEnabled ? "#0039A6" : "#eee", color: podcastEnabled ? "#fff" : "#999", cursor: podcastEnabled ? "pointer" : "not-allowed" }}
               disabled={!podcastEnabled}
-              title={podcastEnabled ? "Generate the podcast episode (~$0.50, 2-4 min)" : "Disabled by READOUT_DISABLE_PODCAST"}
+              title={podcastEnabled ? "Generate the podcast episode. Analyzed hearing: ~$0.50, 2-4 min. From raw: adds transcription + analysis (~$1.55 total, 15-30 min)." : "Disabled by READOUT_DISABLE_PODCAST"}
               onClick={() => onGenerate("podcast")}
             >
               Generate podcast
             </button>
           )}
-          {/* Always offered when no brief exists — whether the hearing VIDEO
-              was downloaded isn't a cached flag (has_video is the shelved v1
-              reel, not that), so the backend checks at run time and the job
-              fails fast with a clear message when the video is missing. */}
+          {/* Generation chains from any state — a missing hearing video is
+              downloaded automatically (video-only download for transcribed
+              hearings), so this is offered whenever no brief exists. */}
           {!hearing.has_video_brief && !genKind && (
             <button
               style={{ ...btnStyle, marginLeft: 6 }}
               disabled={!videoBriefEnabled}
-              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-8, 10-15 min). Needs the hearing video downloaded — fails with a clear message if it isn't." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-8 + any missing upstream stages; downloads the hearing video if needed)." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
               onClick={() => onGenerate("video")}
             >
               Generate video
