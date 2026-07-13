@@ -361,7 +361,7 @@ function PreviewPanel({
                   >
                     Download MP4
                   </a>
-                  <span title={videoBriefEnabled ? "Re-run script + HeyGen render + assembly (~3 min extended cut, ~$6-8)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}>
+                  <span title={videoBriefEnabled ? "Re-run script + HeyGen render + assembly (~3 min extended cut, ~$6-7)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}>
                     {videoBriefEnabled
                       ? confirmBtn("regen-video", "Regenerate", () => onRegen("video"), true)
                       : <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled>Regenerate</button>}
@@ -380,7 +380,7 @@ function PreviewPanel({
               <div style={{ fontSize: 13, color: "#667" }}>
                 <div style={{ marginBottom: 8 }}>
                   No video brief yet. Generation renders the ~3 min extended cut
-                  (~$6-8 of HeyGen) and chains any missing upstream work first —
+                  (~$6-7 of HeyGen) and chains any missing upstream work first —
                   video download, transcription, analysis.
                 </div>
                 <button
@@ -896,7 +896,7 @@ function StudioRow({
             <button
               style={{ ...btnStyle, marginLeft: 6 }}
               disabled={!videoBriefEnabled}
-              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-8 + any missing upstream stages; downloads the hearing video if needed)." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-7 + any missing upstream stages; downloads the hearing video if needed)." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
               onClick={() => onGenerate("video")}
             >
               Generate video
