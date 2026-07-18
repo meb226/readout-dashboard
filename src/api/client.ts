@@ -563,16 +563,21 @@ export async function studioFeedStatus(): Promise<FeedStatus> {
   return apiFetch(`/api/admin/studio/feed-status`);
 }
 
-// Generate (or regenerate) the extended video brief from ANY pipeline
-// state — the studio endpoint chains ingest/transcribe/analyze for raw
-// hearings, then renders. Progress is polled via the shared
-// fetchProcessingStatus (which carries has_podcast/has_video_brief,
-// current_stage + error).
+// Generate (or regenerate) the video brief from ANY pipeline state — the
+// studio endpoint chains ingest/transcribe/analyze for raw hearings, then
+// renders. Progress is polled via the shared fetchProcessingStatus (which
+// carries has_podcast/has_video_brief, current_stage + error).
+//
+// extended=false renders the ~90s standard cut — what automatic Phase B
+// produces, i.e. what a subscriber actually sees (~$3 of HeyGen). extended=true
+// (default) is the ~3-minute studio cut (~$6-7).
 export async function studioGenerateVideo(
   eventId: string,
+  extended = true,
 ): Promise<PodcastTriggerResponse> {
   return apiFetch(`/api/admin/studio/hearings/${eventId}/generate-video`, {
     method: "POST",
+    body: JSON.stringify({ extended }),
   });
 }
 

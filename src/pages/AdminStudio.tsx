@@ -39,7 +39,7 @@ type SortColumn = "hearing_date" | "committee_name" | "title" | "podcast" | "vid
 type SortDirection = "asc" | "desc";
 type PodcastFilter = "all" | "none" | "ready" | "published";
 type GenKind = "podcast" | "video";
-type RowConfirmAction = "regen-podcast" | "regen-video" | "publish" | "unpublish";
+type RowConfirmAction = "regen-podcast" | "regen-video" | "regen-video-std" | "publish" | "unpublish";
 
 interface SortState {
   column: SortColumn;
@@ -194,7 +194,7 @@ function PreviewPanel({
   hearing: HearingListItem;
   episode: PodcastEpisode | undefined;
   generating: GenKind | null;
-  onRegen: (kind: GenKind) => void;
+  onRegen: (kind: GenKind, extended?: boolean) => void;
   confirming: RowConfirmAction | null;
   setConfirming: (a: RowConfirmAction | null) => void;
   publishMutation: (eventId: string) => void;
@@ -362,11 +362,18 @@ function PreviewPanel({
                   >
                     Download MP4
                   </a>
-                  <span title={videoBriefEnabled ? "Re-run script + HeyGen render + assembly (~3 min extended cut, ~$6-7)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}>
-                    {videoBriefEnabled
-                      ? confirmBtn("regen-video", "Regenerate", () => onRegen("video"), true)
-                      : <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled>Regenerate</button>}
-                  </span>
+                  {videoBriefEnabled ? (
+                    <>
+                      <span title="Re-render the ~90s standard cut — what a subscriber actually gets (~$3 HeyGen)">
+                        {confirmBtn("regen-video-std", "Regen · 90s", () => onRegen("video", false), true)}
+                      </span>
+                      <span title="Re-render the ~3 min extended studio cut (~$6-7 HeyGen)">
+                        {confirmBtn("regen-video", "Regen · 3 min", () => onRegen("video", true), true)}
+                      </span>
+                    </>
+                  ) : (
+                    <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled title="Disabled by READOUT_DISABLE_VIDEO_BRIEF">Regenerate</button>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, color: "#889", marginTop: 6 }}>
                   Distribution is manual for now — download and upload to YouTube
@@ -375,23 +382,34 @@ function PreviewPanel({
               </>
             ) : generating === "video" ? (
               <div style={{ fontSize: 13, color: "#7B5EA7" }}>
-                Rendering video brief — HeyGen avatar segments + assembly (~10-15 min for the extended cut)…
+                Rendering video brief — HeyGen avatar segments + assembly…
               </div>
             ) : (
               <div style={{ fontSize: 13, color: "#667" }}>
                 <div style={{ marginBottom: 8 }}>
-                  No video brief yet. Generation renders the ~3 min extended cut
-                  (~$6-7 of HeyGen) and chains any missing upstream work first —
-                  video download, transcription, analysis.
+                  No video brief yet. Generation chains any missing upstream work
+                  first — video download, transcription, analysis — then renders.
+                  <b> 90s</b> is the standard cut a subscriber gets (~$3 HeyGen);
+                  <b> 3 min</b> is the longer studio cut (~$6-7).
                 </div>
-                <button
-                  style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
-                  disabled={!videoBriefEnabled}
-                  title={videoBriefEnabled ? "Generate the extended video brief" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
-                  onClick={() => onRegen("video")}
-                >
-                  Generate video
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
+                    disabled={!videoBriefEnabled}
+                    title={videoBriefEnabled ? "Generate the ~90s standard cut (what subscribers get)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+                    onClick={() => onRegen("video", false)}
+                  >
+                    Generate · 90s
+                  </button>
+                  <button
+                    style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
+                    disabled={!videoBriefEnabled}
+                    title={videoBriefEnabled ? "Generate the ~3 min extended studio cut" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+                    onClick={() => onRegen("video", true)}
+                  >
+                    Generate · 3 min
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -643,7 +661,8 @@ export function AdminStudio() {
   });
 
   const generateVideo = useMutation({
-    mutationFn: studioGenerateVideo,
+    mutationFn: ({ eventId, extended }: { eventId: string; extended: boolean }) =>
+      studioGenerateVideo(eventId, extended),
     onSuccess: (resp) => {
       setGenerating((g) => ({ ...g, [resp.event_id]: "video" }));
     },
@@ -754,9 +773,9 @@ export function AdminStudio() {
                     setExpanded(isExpanded ? null : eventId);
                     setConfirming(null);
                   }}
-                  onGenerate={(kind) => {
+                  onGenerate={(kind, extended) => {
                     if (kind === "podcast") generatePodcast.mutate(eventId);
-                    else generateVideo.mutate(eventId);
+                    else generateVideo.mutate({ eventId, extended: extended ?? true });
                   }}
                   onGenerationDone={() => {
                     setGenerating((g) => {
@@ -835,7 +854,7 @@ function StudioRow({
   genKind: GenKind | null;
   isExpanded: boolean;
   onToggle: () => void;
-  onGenerate: (kind: GenKind) => void;
+  onGenerate: (kind: GenKind, extended?: boolean) => void;
   onGenerationDone: () => void;
   confirming: RowConfirmAction | null;
   setConfirming: (a: RowConfirmAction | null) => void;
