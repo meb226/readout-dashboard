@@ -39,7 +39,7 @@ type SortColumn = "hearing_date" | "committee_name" | "title" | "podcast" | "vid
 type SortDirection = "asc" | "desc";
 type PodcastFilter = "all" | "none" | "ready" | "published";
 type GenKind = "podcast" | "video";
-type RowConfirmAction = "regen-podcast" | "regen-video" | "regen-video-std" | "publish" | "unpublish";
+type RowConfirmAction = "regen-podcast" | "regen-video" | "publish" | "unpublish";
 
 interface SortState {
   column: SortColumn;
@@ -363,14 +363,9 @@ function PreviewPanel({
                     Download MP4
                   </a>
                   {videoBriefEnabled ? (
-                    <>
-                      <span title="Re-render the ~90s standard cut — what a subscriber actually gets (~$3 HeyGen)">
-                        {confirmBtn("regen-video-std", "Regen · 90s", () => onRegen("video", false), true)}
-                      </span>
-                      <span title="Re-render the ~3 min extended studio cut (~$6-7 HeyGen)">
-                        {confirmBtn("regen-video", "Regen · 3 min", () => onRegen("video", true), true)}
-                      </span>
-                    </>
+                    <span title="Re-render the ~3 min video brief (~$1.60 HeyGen)">
+                      {confirmBtn("regen-video", "Regenerate", () => onRegen("video", true), true)}
+                    </span>
                   ) : (
                     <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled title="Disabled by READOUT_DISABLE_VIDEO_BRIEF">Regenerate</button>
                   )}
@@ -388,26 +383,17 @@ function PreviewPanel({
               <div style={{ fontSize: 13, color: "#667" }}>
                 <div style={{ marginBottom: 8 }}>
                   No video brief yet. Generation chains any missing upstream work
-                  first — video download, transcription, analysis — then renders.
-                  <b> 90s</b> is the standard cut a subscriber gets (~$3 HeyGen);
-                  <b> 3 min</b> is the longer studio cut (~$6-7).
+                  first — video download, transcription, analysis — then renders
+                  the ~3 min video brief (~$1.60 HeyGen).
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button
                     style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
                     disabled={!videoBriefEnabled}
-                    title={videoBriefEnabled ? "Generate the ~90s standard cut (what subscribers get)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
-                    onClick={() => onRegen("video", false)}
-                  >
-                    Generate · 90s
-                  </button>
-                  <button
-                    style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
-                    disabled={!videoBriefEnabled}
-                    title={videoBriefEnabled ? "Generate the ~3 min extended studio cut" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+                    title={videoBriefEnabled ? "Generate the ~3 min video brief" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
                     onClick={() => onRegen("video", true)}
                   >
-                    Generate · 3 min
+                    Generate video brief
                   </button>
                 </div>
               </div>
@@ -918,7 +904,7 @@ function StudioRow({
             <button
               style={{ ...btnStyle, marginLeft: 6, border: "none", background: videoBriefEnabled ? "#0039A6" : "#eee", color: videoBriefEnabled ? "#fff" : "#999", cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
               disabled={!videoBriefEnabled}
-              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-7 + any missing upstream stages; downloads the hearing video if needed)." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+              title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$1.60 + any missing upstream stages; downloads the hearing video if needed)." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
               onClick={() => onGenerate("video")}
             >
               Video
