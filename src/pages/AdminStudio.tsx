@@ -18,6 +18,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminPills } from "../components/AdminPills";
+import { PipelineControls } from "../components/PipelineControls";
 import {
   artifactUrl,
   fetchCommittees,
@@ -683,6 +684,8 @@ export function AdminStudio() {
 
         <FeedPanel feed={feed} />
 
+        <PipelineControls />
+
         {/* Filters */}
         <div style={{ display: "flex", gap: 10, margin: "0 0 12px", alignItems: "center", flexWrap: "wrap" }}>
           <input
@@ -881,12 +884,12 @@ function StudioRow({
         <td style={{ ...tdStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
           {state === "none" && !genKind && (
             <button
-              style={{ ...btnStyle, background: podcastEnabled ? "#0039A6" : "#eee", color: podcastEnabled ? "#fff" : "#999", cursor: podcastEnabled ? "pointer" : "not-allowed" }}
+              style={{ ...btnStyle, border: "none", background: podcastEnabled ? "#72A375" : "#eee", color: podcastEnabled ? "#fff" : "#999", cursor: podcastEnabled ? "pointer" : "not-allowed" }}
               disabled={!podcastEnabled}
               title={podcastEnabled ? "Generate the podcast episode. Analyzed hearing: ~$0.50, 2-4 min. From raw: adds transcription + analysis (~$1.55 total, 15-30 min)." : "Disabled by READOUT_DISABLE_PODCAST"}
               onClick={() => onGenerate("podcast")}
             >
-              Generate podcast
+              Podcast
             </button>
           )}
           {/* Generation chains from any state — a missing hearing video is
@@ -894,12 +897,12 @@ function StudioRow({
               hearings), so this is offered whenever no brief exists. */}
           {!hearing.has_video_brief && !genKind && (
             <button
-              style={{ ...btnStyle, marginLeft: 6 }}
+              style={{ ...btnStyle, marginLeft: 6, border: "none", background: videoBriefEnabled ? "#0039A6" : "#eee", color: videoBriefEnabled ? "#fff" : "#999", cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
               disabled={!videoBriefEnabled}
               title={videoBriefEnabled ? "Generate the ~3 min HeyGen video brief (~$6-7 + any missing upstream stages; downloads the hearing video if needed)." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
               onClick={() => onGenerate("video")}
             >
-              Generate video
+              Video
             </button>
           )}
           <button style={{ ...btnStyle, marginLeft: 6 }} onClick={onToggle}>
