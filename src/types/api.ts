@@ -34,7 +34,6 @@ export interface HearingListItem {
   video_source_type: string | null;
   hearing_id: string | null;
   has_audio_brief: boolean;
-  has_video: boolean;
   has_video_brief: boolean;
   has_podcast: boolean;
   has_transcript: boolean;
@@ -75,7 +74,6 @@ export interface HearingDetail {
   resolved_at: string | null;
   hearing_id: string | null;
   has_audio_brief: boolean;
-  has_video: boolean;
   has_video_brief: boolean;
   has_podcast: boolean;
   has_transcript: boolean;

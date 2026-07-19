@@ -124,6 +124,12 @@ export function artifactUrl(eventId: string, artifactPath: string): string {
   return `${API_BASE}/api/hearings/${eventId}/artifacts/${artifactPath}`;
 }
 
+// Same artifact, but served with Content-Disposition: attachment so the
+// browser saves the file instead of opening a player.
+export function artifactDownloadUrl(eventId: string, artifactPath: string): string {
+  return `${artifactUrl(eventId, artifactPath)}?download=true`;
+}
+
 // --- Keyword Counts (ML-311) ---
 
 export async function fetchKeywordCounts(
