@@ -17,7 +17,7 @@ import { HearingStatus } from "../types/api";
 import type { HearingListItem, HearingListResponse, CommitteeInfo } from "../types/api";
 import { StatusBadge } from "./StatusBadge";
 import { ProcessButton } from "./ProcessButton";
-import { artifactUrl, fetchMemo, toggleHearingFlag } from "../api/client";
+import { artifactUrl, artifactDownloadUrl, fetchMemo, toggleHearingFlag } from "../api/client";
 import { downloadMemoAsDocx } from "../utils/memoToDocx";
 import { MemoViewer, type MemoLens } from "./MemoViewer";
 import { TranscriptViewer } from "./TranscriptViewer";
@@ -35,6 +35,26 @@ async function signOutAndRedirect() {
     // Cookie clear is best-effort; redirect regardless.
   }
   window.location.assign("/login");
+}
+
+// Small "Download" link rendered next to a media player's label.
+// Points at the artifact endpoint with ?download=true so the backend
+// serves Content-Disposition: attachment (browser save dialog).
+function DownloadLink({ eventId, path }: { eventId: string; path: string }) {
+  return (
+    <a
+      href={artifactDownloadUrl(eventId, path)}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors"
+      style={{ color: "#0039A6" }}
+      title="Download file"
+    >
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" />
+      </svg>
+      Download
+    </a>
+  );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -143,7 +163,6 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
   const isActionable = isReady || isPreparing || isProcessing;
   const isFlipped = flippedId === hearing.event_id;
   const [audioError, setAudioError] = useState(false);
-  const [videoError, setVideoError] = useState(false);
   const [videoBriefError, setVideoBriefError] = useState(false);
 
   // Close on escape
@@ -365,8 +384,8 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
             )}
 
             {/* Audio + Video — only render when backend confirms artifact exists */}
-            {isComplete && hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video || hearing.has_video_brief) && (
-              <div className={`grid ${[hearing.has_audio_brief && !audioError, hearing.has_video && !videoError, hearing.has_video_brief && !videoBriefError].filter(Boolean).length >= 2 ? "grid-cols-2" : "grid-cols-1"} gap-3 flex-1 min-h-0`} onClick={(e) => e.stopPropagation()}>
+            {isComplete && hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video_brief) && (
+              <div className={`grid ${[hearing.has_audio_brief && !audioError, hearing.has_video_brief && !videoBriefError].filter(Boolean).length >= 2 ? "grid-cols-2" : "grid-cols-1"} gap-3 flex-1 min-h-0`} onClick={(e) => e.stopPropagation()}>
                 {hearing.has_audio_brief && !audioError && (
                   <div className="rounded-lg p-3 flex flex-col" style={{ background: `${c.accent}05`, border: `1px solid ${c.accent}10` }}>
                     <p className="text-xs font-bold text-[#444] mb-2 uppercase tracking-wider">Audio Brief</p>
@@ -375,14 +394,6 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
                         <source src={artifactUrl(hearing.event_id, "briefs/generic/audio_brief.mp3")} type="audio/mpeg" />
                       </audio>
                     </div>
-                  </div>
-                )}
-                {hearing.has_video && !videoError && (
-                  <div className="rounded-lg p-3 flex flex-col" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                    <p className="text-xs font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights</p>
-                    <video controls preload="none" className="w-full rounded aspect-video" onError={() => setVideoError(true)}>
-                      <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
-                    </video>
                   </div>
                 )}
                 {hearing.has_video_brief && !videoBriefError && (
@@ -395,7 +406,7 @@ function Card({ hearing, index, flippedId, onFlip, onOpenMemo, onOpenTranscript,
                 )}
               </div>
             )}
-            {isComplete && hearing.hearing_id && !hearing.has_audio_brief && !hearing.has_video && !hearing.has_video_brief && (
+            {isComplete && hearing.hearing_id && !hearing.has_audio_brief && !hearing.has_video_brief && (
               <p className="text-xs text-[#999] italic text-center py-2">Media not yet available</p>
             )}
 
@@ -443,7 +454,6 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
   const isActionable = hearing.status === HearingStatus.READY || hearing.status === HearingStatus.PREPARING || hearing.status === HearingStatus.PROCESSING;
   const [showMemo, setShowMemo] = useState(false);
   const [audioError, setAudioError] = useState(false);
-  const [videoError, setVideoError] = useState(false);
   const [videoBriefError, setVideoBriefError] = useState(false);
 
   useEffect(() => {
@@ -542,27 +552,25 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
               )}
 
               {/* Inline players — only render when backend confirms artifact exists */}
-              {isComplete && hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video || hearing.has_video_brief) && (
-                <div className={`grid ${[hearing.has_audio_brief && !audioError, hearing.has_video && !videoError, hearing.has_video_brief && !videoBriefError].filter(Boolean).length >= 2 ? "grid-cols-2" : "grid-cols-1"} gap-4`}>
+              {isComplete && hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video_brief) && (
+                <div className={`grid ${[hearing.has_audio_brief && !audioError, hearing.has_video_brief && !videoBriefError].filter(Boolean).length >= 2 ? "grid-cols-2" : "grid-cols-1"} gap-4`}>
                   {hearing.has_audio_brief && !audioError && (
                     <div className="rounded-xl p-4" style={{ background: `${c.accent}04`, border: `1px solid ${c.accent}08` }}>
-                      <p className="text-[11px] font-bold text-[#444] mb-2 uppercase tracking-wider">Audio Brief (~2 min)</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-bold text-[#444] uppercase tracking-wider">Audio Brief (~2 min)</p>
+                        <DownloadLink eventId={hearing.event_id} path="briefs/generic/audio_brief.mp3" />
+                      </div>
                       <audio controls preload="none" className="w-full h-10" onError={() => setAudioError(true)}>
                         <source src={artifactUrl(hearing.event_id, "briefs/generic/audio_brief.mp3")} type="audio/mpeg" />
                       </audio>
                     </div>
                   )}
-                  {hearing.has_video && !videoError && (
-                    <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                      <p className="text-[11px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights (~60s)</p>
-                      <video controls preload="none" className="w-full rounded-lg aspect-video" onError={() => setVideoError(true)}>
-                        <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
-                      </video>
-                    </div>
-                  )}
                   {hearing.has_video_brief && !videoBriefError && (
                     <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                      <p className="text-[11px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Brief (~90s)</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-bold text-[#444] uppercase tracking-wider">Video Brief (~3 min)</p>
+                        <DownloadLink eventId={hearing.event_id} path="briefs/generic/video_brief.mp4" />
+                      </div>
                       <video controls preload="none" className="w-full rounded-lg aspect-video" onError={() => setVideoBriefError(true)}>
                         <source src={artifactUrl(hearing.event_id, "briefs/generic/video_brief.mp4")} type="video/mp4" />
                       </video>
@@ -570,7 +578,7 @@ export function ExpandedView({ hearing, onClose }: { hearing: HearingListItem; o
                   )}
                 </div>
               )}
-              {isComplete && hearing.hearing_id && !hearing.has_audio_brief && !hearing.has_video && !hearing.has_video_brief && (
+              {isComplete && hearing.hearing_id && !hearing.has_audio_brief && !hearing.has_video_brief && (
                 <p className="text-xs text-[#999] italic text-center py-3">Media not yet available</p>
               )}
             </div>
@@ -838,7 +846,6 @@ function Accordion({ label, count, color, children, defaultOpen = false }: {
 function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose: () => void }) {
   const c = cid(hearing.committee_id);
   const [audioError, setAudioError] = useState(false);
-  const [videoError, setVideoError] = useState(false);
   const [videoBriefError, setVideoBriefError] = useState(false);
   // ML-63: the MemoViewer reports its active client lens up here so the
   // header's download button can offer "Include client notes". null =
@@ -886,27 +893,25 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
             </p>
 
             {/* Audio Brief + Video — only render when backend confirms artifact exists */}
-            {hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video || hearing.has_video_brief) && (
+            {hearing.hearing_id && (hearing.has_audio_brief || hearing.has_video_brief) && (
               <div className="space-y-3 mb-4">
                 {hearing.has_audio_brief && !audioError && (
                   <div className="rounded-xl p-4" style={{ background: `${c.accent}04`, border: `1px solid ${c.accent}08` }}>
-                    <p className="text-[10px] font-bold text-[#444] mb-2 uppercase tracking-wider">Audio Brief</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold text-[#444] uppercase tracking-wider">Audio Brief</p>
+                      <DownloadLink eventId={hearing.event_id} path="briefs/generic/audio_brief.mp3" />
+                    </div>
                     <audio controls preload="none" className="w-full" style={{ height: "36px" }} onError={() => setAudioError(true)}>
                       <source src={artifactUrl(hearing.event_id, "briefs/generic/audio_brief.mp3")} type="audio/mpeg" />
                     </audio>
                   </div>
                 )}
-                {hearing.has_video && !videoError && (
-                  <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                    <p className="text-[10px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Highlights</p>
-                    <video controls preload="none" className="w-full rounded-lg" onError={() => setVideoError(true)}>
-                      <source src={artifactUrl(hearing.event_id, "briefs/generic/video_highlights.mp4")} type="video/mp4" />
-                    </video>
-                  </div>
-                )}
                 {hearing.has_video_brief && !videoBriefError && (
                   <div className="rounded-xl p-4" style={{ background: "rgba(0,57,166,0.03)", border: "1px solid rgba(0,57,166,0.06)" }}>
-                    <p className="text-[10px] font-bold text-[#444] mb-2 uppercase tracking-wider">Video Brief</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold text-[#444] uppercase tracking-wider">Video Brief</p>
+                      <DownloadLink eventId={hearing.event_id} path="briefs/generic/video_brief.mp4" />
+                    </div>
                     <video controls preload="none" className="w-full rounded-lg" onError={() => setVideoBriefError(true)}>
                       <source src={artifactUrl(hearing.event_id, "briefs/generic/video_brief.mp4")} type="video/mp4" />
                     </video>
@@ -914,7 +919,7 @@ function MemoSplitView({ hearing, onClose }: { hearing: HearingListItem; onClose
                 )}
               </div>
             )}
-            {hearing.hearing_id && !hearing.has_audio_brief && !hearing.has_video && !hearing.has_video_brief && (
+            {hearing.hearing_id && !hearing.has_audio_brief && !hearing.has_video_brief && (
               <p className="text-xs text-[#999] italic text-center py-2">Media not yet available</p>
             )}
 
