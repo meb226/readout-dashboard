@@ -445,8 +445,10 @@ function PreviewPanel({
               </div>
               {generating === "ad" ? (
                 <div style={{ fontSize: 13, color: "#7B5EA7" }}>
-                  Rendering ad cut — script, HeyGen segments, burned-in captions,
-                  automatic caption validation (~3-5 min)…
+                  Rendering ad cut — script, 3 sequential HeyGen renders,
+                  burned-in captions, automatic caption validation (~5-10 min
+                  on an analyzed hearing; longer if the hearing video,
+                  transcript or analysis must be generated first)…
                 </div>
               ) : adStatus?.has_ad ? (
                 <>
