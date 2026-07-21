@@ -20,16 +20,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminPills } from "../components/AdminPills";
 import { PipelineControls } from "../components/PipelineControls";
 import {
+  artifactDownloadUrl,
   artifactUrl,
   fetchCommittees,
   fetchHearings,
   fetchProcessingStatus,
+  studioAdStatus,
   studioFeedStatus,
   studioGeneratePodcast,
   studioPublishEpisode,
   studioGenerateVideo,
   studioSetFreeEpisode,
   studioUnpublishEpisode,
+  type AdCaptionValidation,
   type FeedStatus,
   type PodcastEpisode,
 } from "../api/client";
@@ -38,8 +41,12 @@ import type { HearingListItem } from "../types/api";
 type SortColumn = "hearing_date" | "committee_name" | "title" | "podcast" | "video";
 type SortDirection = "asc" | "desc";
 type PodcastFilter = "all" | "none" | "ready" | "published";
-type GenKind = "podcast" | "video";
-type RowConfirmAction = "regen-podcast" | "regen-video" | "publish" | "unpublish";
+// "ad" is the ~60s LinkedIn cut — a separate render of the video pipeline,
+// so it occupies the same one-job-per-hearing generation slot as "video".
+type GenKind = "podcast" | "video" | "ad";
+type RowConfirmAction = "regen-podcast" | "regen-video" | "regen-ad" | "publish" | "unpublish";
+
+const AD_ARTIFACT = "briefs/generic/video_brief_ad.mp4";
 
 interface SortState {
   column: SortColumn;
@@ -112,6 +119,29 @@ function podcastPill(state: PodcastState, isFree: boolean) {
     default:
       return <Pill label="Not generated" color="#999" />;
   }
+}
+
+// Captions verdict chip for the 60s ad cut — the backend runs the caption
+// checks automatically after every ad render; this just surfaces the stored
+// verdict. Tooltip carries the non-PASS findings verbatim.
+function captionsChip(v: AdCaptionValidation | null) {
+  if (!v) {
+    return (
+      <Pill
+        label="Captions: not validated"
+        color="#999"
+        title="Rendered before automatic validation existed — Regenerate to validate"
+      />
+    );
+  }
+  const detail =
+    v.checks
+      .filter((c) => c.level !== "PASS")
+      .map((c) => `${c.level} ${c.where}: ${c.msg}`)
+      .join("\n") || "All caption checks passed";
+  if (v.fails > 0) return <Pill label={`Captions: ${v.fails} FAIL`} color="#c44" title={detail} />;
+  if (v.warns > 0) return <Pill label={`Captions: PASS · ${v.warns} warn`} color="#b8860b" title={detail} />;
+  return <Pill label="Captions: PASS" color="#72A375" title={detail} />;
 }
 
 // Where the hearing sits in the pipeline. Raw is a fine starting point —
@@ -194,7 +224,7 @@ function PreviewPanel({
   hearing: HearingListItem;
   episode: PodcastEpisode | undefined;
   generating: GenKind | null;
-  onRegen: (kind: GenKind, extended?: boolean) => void;
+  onRegen: (kind: GenKind) => void;
   confirming: RowConfirmAction | null;
   setConfirming: (a: RowConfirmAction | null) => void;
   publishMutation: (eventId: string) => void;
@@ -209,6 +239,15 @@ function PreviewPanel({
 
   const eventId = hearing.event_id;
   const published = !!episode?.published_at;
+
+  // 60s ad cut: side artifact with no cached DB flag — the panel asks the
+  // studio ad-status endpoint directly (presence + caption validation).
+  // Refreshed via the "studio-ad-status" invalidation when generation ends.
+  const { data: adStatus } = useQuery({
+    queryKey: ["studio-ad-status", eventId],
+    queryFn: () => studioAdStatus(eventId),
+    staleTime: 15_000,
+  });
 
   const toggleScript = async () => {
     const next = !scriptOpen;
@@ -364,7 +403,7 @@ function PreviewPanel({
                   </a>
                   {videoBriefEnabled ? (
                     <span title="Re-render the ~3 min video brief (~$1.60 HeyGen)">
-                      {confirmBtn("regen-video", "Regenerate", () => onRegen("video", true), true)}
+                      {confirmBtn("regen-video", "Regenerate", () => onRegen("video"), true)}
                     </span>
                   ) : (
                     <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled title="Disabled by READOUT_DISABLE_VIDEO_BRIEF">Regenerate</button>
@@ -388,16 +427,88 @@ function PreviewPanel({
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button
-                    style={{ ...btnStyle, opacity: videoBriefEnabled ? 1 : 0.5, cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
-                    disabled={!videoBriefEnabled}
+                    style={{ ...btnStyle, opacity: videoBriefEnabled && !generating ? 1 : 0.5, cursor: videoBriefEnabled && !generating ? "pointer" : "not-allowed" }}
+                    disabled={!videoBriefEnabled || !!generating}
                     title={videoBriefEnabled ? "Generate the ~3 min video brief" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
-                    onClick={() => onRegen("video", true)}
+                    onClick={() => onRegen("video")}
                   >
                     Generate video brief
                   </button>
                 </div>
               </div>
             )}
+
+            {/* ---- 60s ad cut (2026-07-21) ---- */}
+            <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid #e3e8ef" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "#667", marginBottom: 8 }}>
+                60-second ad (LinkedIn)
+              </div>
+              {generating === "ad" ? (
+                <div style={{ fontSize: 13, color: "#7B5EA7" }}>
+                  Rendering ad cut — script, HeyGen segments, burned-in captions,
+                  automatic caption validation (~3-5 min)…
+                </div>
+              ) : adStatus?.has_ad ? (
+                <>
+                  <video
+                    controls
+                    preload="none"
+                    style={{ width: "100%", maxHeight: 240, background: "#000", borderRadius: 6 }}
+                    src={artifactUrl(eventId, AD_ARTIFACT)}
+                  />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {captionsChip(adStatus.validation ?? null)}
+                    {adStatus.validation?.validated_at && (
+                      <span style={{ fontSize: 11, color: "#889" }}>
+                        validated {fmtStamp(adStatus.validation.validated_at)}
+                      </span>
+                    )}
+                    <a
+                      href={artifactDownloadUrl(eventId, AD_ARTIFACT)}
+                      style={{ ...btnStyle, textDecoration: "none", display: "inline-block" }}
+                    >
+                      Download MP4
+                    </a>
+                    {videoBriefEnabled ? (
+                      <span title="Re-render the ~60s captioned ad cut (~$0.40 HeyGen). Never touches the subscriber video brief.">
+                        {confirmBtn("regen-ad", "Regenerate", () => onRegen("ad"), true)}
+                      </span>
+                    ) : (
+                      <button style={{ ...btnStyle, opacity: 0.5, cursor: "not-allowed" }} disabled title="Disabled by READOUT_DISABLE_VIDEO_BRIEF">Regenerate</button>
+                    )}
+                  </div>
+                  {(adStatus.validation?.fails ?? 0) > 0 && (
+                    <div style={{ fontSize: 11, color: "#c44", marginTop: 6 }}>
+                      Caption validation failed — hover the chip for details. Watch
+                      the render before using it in an ad, or Regenerate.
+                    </div>
+                  )}
+                  {!adStatus.validation && (
+                    <div style={{ fontSize: 11, color: "#889", marginTop: 6 }}>
+                      No validation record for this file — Regenerate to render with
+                      automatic caption checks.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: "#667" }}>
+                  <div style={{ marginBottom: 8 }}>
+                    No ad cut yet. Renders a ~60s clip-first cut with burned-in
+                    captions (LinkedIn autoplays muted), validates the captions
+                    automatically and saves to a separate file — the subscriber
+                    video brief is never touched (~$0.40 HeyGen).
+                  </div>
+                  <button
+                    style={{ ...btnStyle, opacity: videoBriefEnabled && !generating ? 1 : 0.5, cursor: videoBriefEnabled && !generating ? "pointer" : "not-allowed" }}
+                    disabled={!videoBriefEnabled || !!generating}
+                    title={videoBriefEnabled ? "Generate the ~60s captioned ad cut (~$0.40 HeyGen)" : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+                    onClick={() => onRegen("ad")}
+                  >
+                    Generate 60s ad
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </td>
@@ -635,6 +746,7 @@ export function AdminStudio() {
     queryClient.invalidateQueries({ queryKey: ["admin-hearings"] });
     queryClient.invalidateQueries({ queryKey: ["hearings"] });
     queryClient.invalidateQueries({ queryKey: ["studio-feed-status"] });
+    queryClient.invalidateQueries({ queryKey: ["studio-ad-status"] });
   };
 
   // ---- Generation mutations ----
@@ -647,12 +759,12 @@ export function AdminStudio() {
   });
 
   const generateVideo = useMutation({
-    mutationFn: ({ eventId, extended }: { eventId: string; extended: boolean }) =>
-      studioGenerateVideo(eventId, extended),
-    onSuccess: (resp) => {
-      setGenerating((g) => ({ ...g, [resp.event_id]: "video" }));
+    mutationFn: ({ eventId, cut }: { eventId: string; cut: "extended" | "ad" }) =>
+      studioGenerateVideo(eventId, cut),
+    onSuccess: (resp, vars) => {
+      setGenerating((g) => ({ ...g, [resp.event_id]: vars.cut === "ad" ? "ad" : "video" }));
     },
-    onError: (e: Error) => window.alert(`Generate video brief failed: ${e.message}`),
+    onError: (e: Error) => window.alert(`Generate video failed: ${e.message}`),
   });
 
   // ---- Publish workflow mutations ----
@@ -759,9 +871,9 @@ export function AdminStudio() {
                     setExpanded(isExpanded ? null : eventId);
                     setConfirming(null);
                   }}
-                  onGenerate={(kind, extended) => {
+                  onGenerate={(kind) => {
                     if (kind === "podcast") generatePodcast.mutate(eventId);
-                    else generateVideo.mutate({ eventId, extended: extended ?? true });
+                    else generateVideo.mutate({ eventId, cut: kind === "ad" ? "ad" : "extended" });
                   }}
                   onGenerationDone={() => {
                     setGenerating((g) => {
@@ -840,7 +952,7 @@ function StudioRow({
   genKind: GenKind | null;
   isExpanded: boolean;
   onToggle: () => void;
-  onGenerate: (kind: GenKind, extended?: boolean) => void;
+  onGenerate: (kind: GenKind) => void;
   onGenerationDone: () => void;
   confirming: RowConfirmAction | null;
   setConfirming: (a: RowConfirmAction | null) => void;
@@ -880,8 +992,8 @@ function StudioRow({
           )}
         </td>
         <td style={tdStyle}>
-          {genKind === "video"
-            ? <Pill label={stageLabel ?? "Rendering…"} color="#7B5EA7" />
+          {genKind === "video" || genKind === "ad"
+            ? <Pill label={genKind === "ad" ? "Rendering ad…" : (stageLabel ?? "Rendering…")} color="#7B5EA7" />
             : hearing.has_video_brief
               ? <Pill label="Ready" color="#0039A6" />
               : <Pill label="None" color="#999" />}
@@ -908,6 +1020,18 @@ function StudioRow({
               onClick={() => onGenerate("video")}
             >
               Video
+            </button>
+          )}
+          {/* 60s LinkedIn ad cut — separate artifact, safe to render any
+              time; captions burned in + validated automatically. */}
+          {!genKind && (
+            <button
+              style={{ ...btnStyle, marginLeft: 6, border: "none", background: videoBriefEnabled ? "#0E7490" : "#eee", color: videoBriefEnabled ? "#fff" : "#999", cursor: videoBriefEnabled ? "pointer" : "not-allowed" }}
+              disabled={!videoBriefEnabled}
+              title={videoBriefEnabled ? "Generate the ~60s captioned LinkedIn ad cut (~$0.40 HeyGen + any missing upstream stages). Saves to a separate file — the subscriber video brief is never touched." : "Disabled by READOUT_DISABLE_VIDEO_BRIEF"}
+              onClick={() => onGenerate("ad")}
+            >
+              60s ad
             </button>
           )}
           <button style={{ ...btnStyle, marginLeft: 6 }} onClick={onToggle}>
