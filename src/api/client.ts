@@ -574,17 +574,51 @@ export async function studioFeedStatus(): Promise<FeedStatus> {
 // renders. Progress is polled via the shared fetchProcessingStatus (which
 // carries has_podcast/has_video_brief, current_stage + error).
 //
-// extended=false renders the ~90s standard cut — what automatic Phase B
-// produces, i.e. what a subscriber actually sees (~$3 of HeyGen). extended=true
-// (default) is the ~3-minute studio cut (~$6-7).
+// cut="extended" (default) is the ~3-minute brief (~$1.60 HeyGen) that
+// replaces the subscriber-facing video_brief.mp4. cut="ad" renders the
+// ~60s LinkedIn ad cut (~$0.40) with BURNED-IN CAPTIONS to a separate
+// video_brief_ad.mp4 — it never touches the subscriber deliverable, and
+// the backend validates the captions automatically (see studioAdStatus).
+export type VideoCut = "extended" | "ad";
+
 export async function studioGenerateVideo(
   eventId: string,
-  extended = true,
+  cut: VideoCut = "extended",
 ): Promise<PodcastTriggerResponse> {
   return apiFetch(`/api/admin/studio/hearings/${eventId}/generate-video`, {
     method: "POST",
-    body: JSON.stringify({ extended }),
+    body: JSON.stringify({ cut }),
   });
+}
+
+// --- 60s ad cut status (2026-07-21) ---
+
+export interface AdCaptionCheck {
+  level: string; // PASS | WARN | FAIL
+  where: string;
+  msg: string;
+}
+
+export interface AdCaptionValidation {
+  fails: number;
+  warns: number;
+  validated_at: string | null;
+  checks: AdCaptionCheck[];
+}
+
+export interface AdStatus {
+  event_id: string;
+  hearing_id: string | null;
+  has_ad: boolean;
+  artifact_path: string;
+  validation: AdCaptionValidation | null;
+}
+
+// Presence + automatic caption-validation verdict for the 60s ad cut.
+// The ad has no cached DB flag (it's a side artifact), so the studio
+// panel asks this endpoint directly.
+export async function studioAdStatus(eventId: string): Promise<AdStatus> {
+  return apiFetch(`/api/admin/studio/hearings/${eventId}/ad-status`);
 }
 
 // ------------------------------------------------------------------
