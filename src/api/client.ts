@@ -459,7 +459,10 @@ export interface HealthNoBroadcastItem {
 export interface HealthCommitteeRow {
   committee_id: string;
   broadcast_expected: number;
+  /** ML-728: VERIFIED acquisitions only — URL probed and plays, or already transcribed. */
   resolved: number;
+  /** ML-728: URL on file that nothing has probed. In neither side of the rate. */
+  unverified?: number;
   unresolved: number;
   in_flight: number;
   missed: number;
@@ -477,14 +480,24 @@ export interface ResolutionHealth {
     future: number;
     no_broadcast: number;
     broadcast_expected: number;
+    /** ML-728: VERIFIED acquisitions only. */
     resolved: number;
+    /** ML-728: optional so the page still renders against a backend that predates it. */
+    unverified?: number;
     unresolved: number;
     in_flight: number;
     missed: number;
+    /** resolved / (resolved + missed). Says nothing about the unverified. */
     resolution_rate: number;
+    /** The rate if every unverified URL plays (what this metric used to report). */
+    resolution_rate_ceiling?: number;
+    /** The rate if none of them does. */
+    resolution_rate_floor?: number;
   };
   committees: HealthCommitteeRow[];
   unresolved_by_reason: Record<string, number>;
+  /** ML-728: unverified count by source_type, e.g. { youtube: 1036, senate_isvp: 3 }. */
+  unverified_by_source?: Record<string, number>;
   misses: HealthMissItem[];
   in_flight: HealthMissItem[];
   no_broadcast_by_reason: Record<string, number>;

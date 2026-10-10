@@ -7,6 +7,12 @@
  * the in-flight set (aired recently, video may still post — not graded),
  * per-committee rates, and the audited no-broadcast exclusions.
  *
+ * ML-728: "resolved" means VERIFIED — the URL was probed and plays, or the
+ * hearing is already transcribed. A URL on file that nothing has probed is
+ * "unverified": shown as its own number and left out of the rate on both
+ * sides. The page used to count those as acquired and read 98.2% while
+ * three quarters of the table had never been checked.
+ *
  * Operator tool in the AdminHearings visual style: flat, info-dense,
  * Inter, no gradient chrome.
  */
@@ -22,6 +28,11 @@ import {
 const NAVY = "#0039A6";
 const GREEN = "#065F46";
 const RED = "#991B1B";
+const AMBER = "#92400E";
+
+// Same threshold the daily digest uses to put the count in its subject line.
+// Steady state is zero — every live path probes before it writes.
+const UNVERIFIED_LOUD = 25;
 
 const th: React.CSSProperties = {
   textAlign: "left",
@@ -50,7 +61,7 @@ function pct(x: number): string {
 
 function rateColor(rate: number): string {
   if (rate >= 0.97) return GREEN;
-  if (rate >= 0.9) return "#92400E";
+  if (rate >= 0.9) return AMBER;
   return RED;
 }
 
@@ -131,6 +142,9 @@ export function AdminHealth() {
     staleTime: 60_000,
   });
 
+  // Absent on a backend that predates ML-728; treat as zero rather than NaN.
+  const unverified = data?.overall.unverified ?? 0;
+
   return (
     <>
       <AdminPills current="readout" />
@@ -172,13 +186,25 @@ export function AdminHealth() {
               <StatCard
                 label="SLA rate"
                 value={pct(data.overall.resolution_rate)}
-                sub={`resolved ${data.overall.resolved} of ${data.overall.resolved + data.overall.missed} graded`}
+                sub={`verified ${data.overall.resolved.toLocaleString()} of ${(data.overall.resolved + data.overall.missed).toLocaleString()} graded`}
                 color={rateColor(data.overall.resolution_rate)}
+              />
+              <StatCard
+                label="Verified"
+                value={data.overall.resolved.toLocaleString()}
+                sub="URL probed and plays, or already transcribed"
+                color={GREEN}
+              />
+              <StatCard
+                label="Unverified"
+                value={unverified.toLocaleString()}
+                sub="URL on file, never probed — not graded"
+                color={unverified >= UNVERIFIED_LOUD ? AMBER : undefined}
               />
               <StatCard
                 label="True misses"
                 value={String(data.overall.missed)}
-                sub={`unresolved past ${data.upload_window_days}d — actionable`}
+                sub={`no playable video past ${data.upload_window_days}d — actionable`}
                 color={data.overall.missed > 0 ? RED : GREEN}
               />
               <StatCard
@@ -197,6 +223,26 @@ export function AdminHealth() {
                 sub={`of ${data.overall.total} total hearings`}
               />
             </div>
+
+            {/* What the rate leaves out, and how far it could move */}
+            {unverified > 0 && (
+              <div style={{
+                background: unverified >= UNVERIFIED_LOUD ? "#FFF6E5" : "#F6F7F9",
+                border: `1px solid ${unverified >= UNVERIFIED_LOUD ? "#F3D9A4" : "#E5E7EB"}`,
+                borderRadius: 10, padding: "12px 16px", margin: "0 0 8px",
+                fontSize: "0.85rem", color: "#374151",
+              }}>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>{unverified.toLocaleString()} resolutions have a URL nobody has probed.</strong>{" "}
+                  They are in neither side of the rate. It is{" "}
+                  <strong>{pct(data.overall.resolution_rate_ceiling ?? data.overall.resolution_rate)}</strong>{" "}
+                  if every one plays and{" "}
+                  <strong>{pct(data.overall.resolution_rate_floor ?? data.overall.resolution_rate)}</strong>{" "}
+                  if none does.
+                </div>
+                <ReasonChips reasons={data.unverified_by_source ?? {}} />
+              </div>
+            )}
 
             {/* True misses — the actionable list */}
             <h2 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "26px 0 4px" }}>
@@ -217,7 +263,8 @@ export function AdminHealth() {
                   <tr>
                     <th style={th}>Committee</th>
                     <th style={{ ...th, textAlign: "right" }}>Rate</th>
-                    <th style={{ ...th, textAlign: "right" }}>Resolved</th>
+                    <th style={{ ...th, textAlign: "right" }}>Verified</th>
+                    <th style={{ ...th, textAlign: "right" }}>Unverified</th>
                     <th style={{ ...th, textAlign: "right" }}>Missed</th>
                     <th style={{ ...th, textAlign: "right" }}>In-flight</th>
                     <th style={{ ...th, textAlign: "right" }}>No broadcast</th>
@@ -225,19 +272,26 @@ export function AdminHealth() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.committees.map((c: HealthCommitteeRow) => (
+                  {data.committees.map((c: HealthCommitteeRow) => {
+                    // Nothing graded yet (every URL unverified, or no hearings):
+                    // the API reports 1.0, and "100%" would claim what nobody checked.
+                    const graded = c.resolved + c.missed > 0;
+                    const cUnverified = c.unverified ?? 0;
+                    return (
                     <tr key={c.committee_id}>
                       <td style={{ ...td, whiteSpace: "nowrap" }}>{c.committee_id}</td>
-                      <td style={{ ...num, fontWeight: 600, color: rateColor(c.resolution_rate) }}>
-                        {pct(c.resolution_rate)}
+                      <td style={{ ...num, fontWeight: 600, color: graded ? rateColor(c.resolution_rate) : "#9CA3AF" }}>
+                        {graded ? pct(c.resolution_rate) : "—"}
                       </td>
                       <td style={num}>{c.resolved}</td>
+                      <td style={{ ...num, color: cUnverified > 0 ? AMBER : "#111827" }}>{cUnverified}</td>
                       <td style={{ ...num, color: c.missed > 0 ? RED : "#111827" }}>{c.missed}</td>
                       <td style={num}>{c.in_flight}</td>
                       <td style={num}>{c.no_broadcast}</td>
                       <td style={num}>{c.oldest_unresolved_days > 0 ? `${c.oldest_unresolved_days}d` : "—"}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -300,8 +354,9 @@ export function AdminHealth() {
 
             <p style={{ color: "#9CA3AF", fontSize: "0.75rem", marginTop: 24 }}>
               Generated {data.generated_at} · upload window {data.upload_window_days}d ·
-              in-flight hearings are excluded from the SLA denominator (committees post
-              recordings 1–2 weeks late).
+              rate = verified ÷ (verified + true misses). In-flight hearings are excluded
+              (committees post recordings 1–2 weeks late), and so are unverified URLs,
+              which are neither a success nor a miss until something probes them.
             </p>
           </>
         )}
